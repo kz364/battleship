@@ -13,6 +13,7 @@ because the investigation is the interesting part.
 | Tool                                  | What it is                                                                    | What it caught   |
 | ------------------------------------- | ----------------------------------------------------------------------------- | ---------------- |
 | Playing the game in a browser         | Manual play, ~40 turns per pass                                               | #6, #7           |
+| Someone else playing it               | A pair of eyes that hadn't seen it before                                     | #9               |
 | `npm run sim`                         | 100k headless games per difficulty, measures shot counts                      | #3               |
 | `npm run fuzz`                        | Invariant checker over full games (see [#8](#8-what-the-fuzzer-did-not-find)) | nothing — see #8 |
 | `npm test`                            | 31 unit tests + 5 strength regressions                                        | guarded #3's fix |
@@ -434,6 +435,64 @@ ok  hard: 2000 games, all invariants held
 6,000 games, ~300,000 individual shots, no violations. That's the evidence behind the
 claim in #3 that the AI plays legally, and it runs in CI at 500 games per difficulty so a
 future refactor can't quietly break the accounting.
+
+---
+
+## 9. Every fired cell grew a second dot
+
+**Symptom.** In the classic theme, cells that had been fired at showed **two** circles
+side by side — the peg, plus a smaller empty socket next to it, both shoved off centre.
+Unfired cells were fine, and the retro theme was fine.
+
+**How it was found.** Reported by someone else playing the game: _"the ui looks kinda
+funky with two dots on each block for our view"_, followed by _"it isn't here now but it
+was there in the previous game"_. That second message is what localised it: the artefact
+appears as the board fills up and is invisible on a fresh one, which is why it survived
+my own browser passes — I had been checking placement and firing behaviour, not staring
+at an already-shot cell.
+
+**Root cause.** A cell centres its contents with grid:
+
+```css
+.cell {
+  display: grid;
+  place-items: center;
+}
+```
+
+The moulded peg socket is a `::before`, and the peg itself is a real element rendered
+only once the cell has been fired at:
+
+```tsx
+{
+  shot && <span className="peg" />;
+}
+```
+
+A `::before` is a genuine child box, so with both present the cell had **two** grid items.
+`place-items: center` doesn't stack them — grid laid them out in two auto columns and
+centred the pair. Hence two dots. With no peg there is only one item, so an unfired cell
+looked perfect, and the retro theme has no socket at all so it never showed.
+
+**Fix.** Take the socket out of the grid flow entirely, so the peg drops _into_ it rather
+than beside it. `.cell` is already `position: relative`:
+
+```css
+.app[data-theme="classic"] .cell::before {
+  /* The moulded socket each peg drops into. Taken out of the grid flow so it sits
+     behind the peg rather than beside it. */
+  content: "";
+  position: absolute;
+  width: 34%;
+  height: 34%;
+  /* ... */
+}
+```
+
+**Takeaway,** same one as entry #5: this is a CSS layout bug, so nothing in the toolchain
+could have caught it — the markup is valid, the types are fine, every test passes. It also
+only manifests in a state you have to _play into_. Loading the page and looking at it is
+not testing it.
 
 ---
 
