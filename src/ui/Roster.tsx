@@ -1,6 +1,6 @@
 import { isSunk } from "../engine/game";
 import { FLEET, type Board, type ShipId } from "../engine/types";
-import { spriteUrl } from "./Ship";
+import { spriteUrl } from "./sprites";
 
 interface RosterProps {
   title: string;

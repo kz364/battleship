@@ -1,16 +1,5 @@
 import type { Placement } from "../engine/types";
-
-const SPRITES: Record<string, string> = {
-  carrier: "carrier",
-  battleship: "battleship",
-  cruiser: "cruiser",
-  submarine: "submarine",
-  destroyer: "destroyer",
-};
-
-export function spriteUrl(shipId: string): string {
-  return `${import.meta.env.BASE_URL}ships/${SPRITES[shipId]}.png`;
-}
+import { spriteUrl } from "./sprites";
 
 interface ShipProps {
   placement: Placement;
