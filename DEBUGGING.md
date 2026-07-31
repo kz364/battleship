@@ -14,6 +14,7 @@ because the investigation is the interesting part.
 | ------------------------------------- | ----------------------------------------------------------------------------- | ---------------- |
 | Playing the game in a browser         | Manual play, ~40 turns per pass                                               | #6, #7           |
 | Someone else playing it               | A pair of eyes that hadn't seen it before                                     | #9               |
+| Scripted browser E2E pass             | Full recorded playthrough, asserting on computed styles                       | #10, #11         |
 | `npm run sim`                         | 100k headless games per difficulty, measures shot counts                      | #3               |
 | `npm run fuzz`                        | Invariant checker over full games (see [#8](#8-what-the-fuzzer-did-not-find)) | nothing — see #8 |
 | `npm test`                            | 31 unit tests + 5 strength regressions                                        | guarded #3's fix |
@@ -495,6 +496,144 @@ only manifests in a state you have to _play into_. Loading the page and looking 
 not testing it.
 
 ---
+
+---
+
+## 10. "Click a placed ship to pick it up again" did nothing
+
+**Symptom.** The placement panel tells you _"Click a placed ship to pick it up again."_
+Clicking a hull on your grid did nothing at all — no pickup, no error. You could only
+re-position a ship by re-selecting it from the roster list.
+
+**How it was found.** An end-to-end browser pass, from someone working through the
+placement UI as documented rather than as I habitually used it. I had built the feature
+and then, every time I tested, reached for the roster out of habit — so I never exercised
+my own instructions.
+
+**Root cause.** A stacking-order contradiction between two rules written at different
+times. Hit-testing the hull returned `app__main`, i.e. the click passed straight through
+the ship _and_ the cell. The grid layer is deliberately arranged so a peg is never hidden
+behind a hull:
+
+```css
+/* Ships sit under the pegs so a hit marker is never hidden by a hull. */
+.board__ships {
+  z-index: 1;
+  pointer-events: none;
+}
+.cell {
+  z-index: 2;
+}
+```
+
+The pickup handler, however, was mounted on the ship sprites, with a `.ship--grabbable`
+class re-enabling pointer events on them:
+
+```tsx
+{
+  battle.fleet.map((placement) => (
+    <Ship
+      placement={placement}
+      onPointerDown={() => pickUp(placement.shipId)}
+    />
+  ));
+}
+```
+
+That never wins: the cell button sits above the ship layer and swallows the click first.
+The overlay was also rendering a _second_ copy of every hull purely to have something to
+attach the handler to, which is what put two sprites per ship in the DOM.
+
+**Fix.** Let the cell resolve it. The cell already knows its coordinate, and the engine
+can already say which ship occupies a square, so the click handler asks:
+
+```tsx
+const handlePlacementClick = (coord: Coord) => {
+  // Clicking a hull picks that ship back up. The hull sprites sit in a
+  // pointer-events:none layer beneath the cell buttons, so the cell has to resolve
+  // this rather than the sprite itself.
+  const occupant = placementAt(battle.fleet, coord.row, coord.col);
+  if (occupant) {
+    pickUp(occupant.shipId);
+    return;
+  }
+  // ...otherwise place the currently selected ship here
+};
+```
+
+The duplicate grab-layer, the `onPointerDown` prop on `Ship` and the `.ship--grabbable`
+rule all went with it — the visible hulls were never the right place for this.
+
+**Note.** No z-index was touched. The original constraint (pegs above hulls) is still
+correct; the mistake was attaching behaviour to the layer that had deliberately been made
+inert.
+
+---
+
+## 11. Retro wrecks looked exactly like live ships
+
+**Symptom.** In the retro CRT theme, a sunk ship was indistinguishable from the ships
+still afloat — no dimming, no desaturation. The classic theme greyed wrecks out correctly.
+
+**How it was found.** The same browser pass, and specifically by _measuring_ rather than
+eyeballing: reading computed styles showed `.ship img` and `.ship--sunk img` resolving to
+byte-identical `filter` and `opacity` values under retro. Worth stressing, because "does
+that look a bit dimmer to you?" is not a test — on a green-on-black CRT theme a human
+squinting at two hulls will talk themselves into seeing a difference.
+
+**Root cause.** CSS specificity, not a wrong value. The retro theme recolours every hull
+to phosphor green:
+
+```css
+.app[data-theme="retro"] .ship img {
+  /* (0,2,1) */
+  filter: grayscale(1) brightness(1.1) sepia(1) hue-rotate(65deg)
+    saturate(2.5)...;
+  opacity: 0.85;
+}
+```
+
+and the sunk tint was written as a plain state class:
+
+```css
+.ship--sunk img {
+  /* (0,1,1) — loses */
+  filter: var(--sunk-tint) drop-shadow(...);
+}
+```
+
+`filter` is a single property, so the losing rule doesn't merge — it's discarded outright
+and the wreck keeps the full-brightness phosphor treatment. The classic theme has no
+equivalent themed override, which is exactly why it worked and hid the problem.
+
+The same trap had silently swallowed `.ship--ghost img` (the translucent placement
+preview) and `.ship--invalid img` (the red "you can't put it there" tint) under retro.
+Only the sunk case was reported; the other two were found by looking for the pattern once
+the mechanism was understood.
+
+**Fix.** Give each state tint a retro-specific selector so it matches the theme rule's
+specificity, rather than bumping specificity globally or reaching for `!important`:
+
+```css
+/* The retro theme recolours every hull to phosphor green with a rule that would
+   otherwise out-specify these state tints, so each one has to match its specificity. */
+.ship--ghost img,
+.app[data-theme='retro'] .ship--ghost img { opacity: 0.55; }
+
+.ship--invalid img,
+.app[data-theme='retro'] .ship--invalid img { ... }
+
+.ship--sunk img,
+.app[data-theme='retro'] .ship--sunk img {
+  filter: var(--sunk-tint) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+  opacity: 0.75;
+}
+```
+
+**Takeaway.** Three entries in this log (#5, #9, #11) are CSS, and none of them could be
+caught by types, lint, tests or the build. A theme switcher makes it worse: every visual
+state now has to be checked in _both_ themes, because a themed rule can quietly outrank a
+state rule in one theme and not the other.
 
 ## Things deliberately not "fixed"
 

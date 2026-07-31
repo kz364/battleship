@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createBoard, isLegalPlacement } from "./engine/board";
+import { createBoard, isLegalPlacement, placementAt } from "./engine/board";
 import {
   FLEET,
   type Coord,
@@ -84,6 +84,15 @@ export default function App() {
   );
 
   const handlePlacementClick = (coord: Coord) => {
+    // Clicking a hull picks that ship back up. The hull sprites sit in a
+    // pointer-events:none layer beneath the cell buttons, so the cell has to resolve
+    // this rather than the sprite itself.
+    const occupant = placementAt(battle.fleet, coord.row, coord.col);
+    if (occupant) {
+      pickUp(occupant.shipId);
+      return;
+    }
+
     if (!selected) return;
     const spec = FLEET.find((s) => s.id === selected);
     if (!spec) return;
@@ -178,17 +187,6 @@ export default function App() {
             }
             overlay={
               <>
-                {battle.phase === "placement" &&
-                  battle.fleet.map((placement) => (
-                    <Ship
-                      key={`grab-${placement.shipId}`}
-                      placement={placement}
-                      onPointerDown={(event) => {
-                        event.preventDefault();
-                        pickUp(placement.shipId);
-                      }}
-                    />
-                  ))}
                 {ghost && (
                   <Ship placement={ghost} ghost invalid={!ghostLegal} />
                 )}

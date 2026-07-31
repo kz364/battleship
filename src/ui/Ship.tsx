@@ -18,20 +18,13 @@ interface ShipProps {
   ghost?: boolean;
   invalid?: boolean;
   sunk?: boolean;
-  onPointerDown?: (event: React.PointerEvent) => void;
 }
 
 /**
  * A ship laid over the grid. Position and size are expressed in `--cell` units so the
  * sprite always lines up with the squares underneath, at any board size.
  */
-export function Ship({
-  placement,
-  ghost,
-  invalid,
-  sunk,
-  onPointerDown,
-}: ShipProps) {
+export function Ship({ placement, ghost, invalid, sunk }: ShipProps) {
   const vertical = placement.orientation === "vertical";
   const spanAcross = vertical ? 1 : placement.length;
   const spanDown = vertical ? placement.length : 1;
@@ -41,7 +34,6 @@ export function Ship({
     ghost ? "ship--ghost" : "",
     invalid ? "ship--invalid" : "",
     sunk ? "ship--sunk" : "",
-    onPointerDown ? "ship--grabbable" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -49,7 +41,6 @@ export function Ship({
   return (
     <div
       className={className}
-      onPointerDown={onPointerDown}
       style={{
         left: `calc(var(--cell) * ${placement.col})`,
         top: `calc(var(--cell) * ${placement.row})`,
