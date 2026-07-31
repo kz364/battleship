@@ -379,8 +379,10 @@ kbd {
 }
 
 .app[data-theme="classic"] .cell::before {
-  /* The moulded socket each peg drops into. */
+  /* The moulded socket each peg drops into. Taken out of the grid flow so it sits
+     behind the peg rather than beside it. */
   content: "";
+  position: absolute;
   width: 34%;
   height: 34%;
   border-radius: 50%;
