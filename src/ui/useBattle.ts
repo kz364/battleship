@@ -1,0 +1,125 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { isLegalPlacement, randomFleet } from "../engine/board";
+import { applyShot, createGame, type GameState } from "../engine/game";
+import { createRng } from "../engine/rng";
+import {
+  FLEET,
+  type Coord,
+  type Placement,
+  type ShipId,
+} from "../engine/types";
+import { chooseShot, type Difficulty } from "../ai/strategies";
+import { viewOf } from "../ai/view";
+
+const AI_THINKING_MS = 650;
+
+export type Phase = "placement" | "playing" | "over";
+
+export interface Battle {
+  phase: Phase;
+  difficulty: Difficulty;
+  setDifficulty: (difficulty: Difficulty) => void;
+
+  /** The player's fleet while they are arranging it. */
+  fleet: Placement[];
+  placeShip: (placement: Placement) => boolean;
+  removeShip: (shipId: ShipId) => void;
+  randomizeFleet: () => void;
+  clearFleet: () => void;
+  startBattle: () => void;
+
+  game: GameState | null;
+  /** True while the AI is deliberating, so the board can be locked. */
+  aiThinking: boolean;
+  fireAtEnemy: (coord: Coord) => void;
+  newGame: () => void;
+}
+
+export function useBattle(): Battle {
+  const rng = useRef(createRng()).current;
+  const [difficulty, setDifficulty] = useState<Difficulty>("hard");
+  const [fleet, setFleet] = useState<Placement[]>(() => randomFleet(rng));
+  const [game, setGame] = useState<GameState | null>(null);
+  const [aiThinking, setAiThinking] = useState(false);
+
+  const phase: Phase =
+    game === null ? "placement" : game.phase === "over" ? "over" : "playing";
+
+  const placeShip = useCallback((placement: Placement): boolean => {
+    let accepted = false;
+    setFleet((current) => {
+      const others = current.filter((p) => p.shipId !== placement.shipId);
+      if (!isLegalPlacement(placement, others)) return current;
+      accepted = true;
+      return [...others, placement];
+    });
+    return accepted;
+  }, []);
+
+  const removeShip = useCallback((shipId: ShipId) => {
+    setFleet((current) => current.filter((p) => p.shipId !== shipId));
+  }, []);
+
+  const randomizeFleet = useCallback(() => setFleet(randomFleet(rng)), [rng]);
+  const clearFleet = useCallback(() => setFleet([]), []);
+
+  const startBattle = useCallback(() => {
+    if (fleet.length !== FLEET.length) return;
+    setGame(createGame(fleet, randomFleet(rng)));
+  }, [fleet, rng]);
+
+  const newGame = useCallback(() => {
+    setGame(null);
+    setAiThinking(false);
+    setFleet(randomFleet(rng));
+  }, [rng]);
+
+  const fireAtEnemy = useCallback((coord: Coord) => {
+    setGame((current) => {
+      if (!current || current.phase !== "playing" || current.turn !== "player")
+        return current;
+      if (current.ai.shots[coord.row][coord.col] !== null) return current;
+      return applyShot(current, "player", coord);
+    });
+  }, []);
+
+  // The AI's turn, on a timer so the player can watch their own shot land first.
+  // chooseShot() draws from the shared RNG, so it has to run out here rather than inside
+  // the setGame updater: React invokes updaters twice under Strict Mode, which would
+  // advance the RNG twice per turn and make the AI's choices unreproducible.
+  useEffect(() => {
+    if (!game || game.phase !== "playing" || game.turn !== "ai") {
+      setAiThinking(false);
+      return;
+    }
+
+    setAiThinking(true);
+    const timer = setTimeout(() => {
+      const coord = chooseShot(viewOf(game.player), difficulty, rng);
+      setGame((current) => {
+        if (!current || current.phase !== "playing" || current.turn !== "ai")
+          return current;
+        return applyShot(current, "ai", coord);
+      });
+      setAiThinking(false);
+    }, AI_THINKING_MS);
+
+    return () => clearTimeout(timer);
+  }, [game, difficulty, rng]);
+
+  return {
+    phase,
+    difficulty,
+    setDifficulty,
+    fleet,
+    placeShip,
+    removeShip,
+    randomizeFleet,
+    clearFleet,
+    startBattle,
+    game,
+    aiThinking,
+    fireAtEnemy,
+    newGame,
+  };
+}
