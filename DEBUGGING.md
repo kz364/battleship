@@ -999,6 +999,32 @@ ones to distrust.
   it is random and legal but sequentially biased. Genuine uniformity means rejection
   sampling over whole configurations, and the bias is invisible to the density AI, which
   reasons from shots rather than from a placement prior.
+- **No "Grand Admiral" built on Monte Carlo sampling.** Prompted by
+  [mitchelljy/battleships_ai](https://github.com/mitchelljy/battleships_ai), which picks
+  its shot by sampling thousands of random ship placements and firing at the most-covered
+  square. That is the same per-ship marginal `densityMap` already computes — by
+  enumeration rather than by sampling, which is the limit the sampling converges to. So it
+  cannot be better, only noisier, and measuring it confirmed that: reimplemented in this
+  engine (charitably — uniform over legal placements rather than their rejection loop) and
+  run over 1,000 games against identical fleets, it came in at **+0.47 ± 0.79 shots**
+  versus Admiral, at 23 ms per move against 3.5 ms. A 60-game pilot had it 0.65 shots
+  _ahead_, which is the reminder that a difference this small needs paired trials and a
+  confidence interval rather than a leaderboard.
+
+  Its one real idea is weighting placements that overlap known hits, which Admiral also
+  does — linearly (`5 * hits + 1`) rather than exponentially (`10 ** hits`). Swapping ours
+  for theirs changed nothing measurable (+0.09 ± 0.80), though dropping to `2 ** hits` is
+  clearly worse (+4.25 ± 0.81): the weight only has to be big enough that finishing a
+  wounded ship always outranks hunting, and past that the exact curve is irrelevant.
+
+  The genuinely different idea was worth more testing. Admiral counts each ship
+  independently, so it happily counts placements that could never coexist — overlapping,
+  or leaving a hit unexplained. Sampling whole _jointly consistent_ fleets (no overlaps,
+  every unsunk hit belonging to some ship) is strictly better-informed, and Monte Carlo is
+  the right tool for it. It still did not win: **+0.38 ± 0.65 shots** at 1,500 fleet
+  samples per move over 1,500 games, and +0.85 ± 0.64 at 300 samples. Better information,
+  no better result — by the time the joint constraints bite, the marginals already point
+  at the same square. Admiral stays.
 - **The AI does not model human placement habits.** A stronger opponent could exploit
   the fact that humans place ships badly (edge-biased, avoiding contact) by weighting its
   heat map with a learned placement prior. Left out: it needs real human game data, and
