@@ -29,6 +29,8 @@ part.
 | [14](#14-the-fix-for-12-reported-every-successful-placement-as-a-failure) | Every _legal_ placement also flashed "can't go there"                       | Browser pass — the new E2E suite was green throughout | `placeShip()` returned a flag captured inside a `setFleet` updater, which React may run after the dispatch returns                 | Decide legality in the callback, before dispatching; assert on the status synchronously   |
 | [15](#15-the-log-scrolled-the-page-out-from-under-you)                    | Each new log entry scrolled the whole page down mid-game                    | Someone else playing it                               | The log called `scrollIntoView` to follow its newest entry, which scrolls _every_ scrollable ancestor, the document included       | Show newest first, so there is nothing to scroll to                                       |
 | [16](#16-the-difficulty-blurbs-did-not-say-whose-fleet-was-being-sunk)    | "~53 shots" did not say whose shots, and Easy was worded differently        | Someone else playing it                               | The blurb quoted a number with no subject, so it read as the player's budget                                                       | One phrasing across all three, and a test pinning each number to the simulator            |
+| [17](#17-the-game-was-unplayable-by-ear)                                  | A screen reader never announced whether a shot hit, missed or sank anything | `npm run test:e2e`, checking the reordered log        | The only live region (the status line) says "Your move." and never the outcome; the outcome lives in the log, which was inert       | `aria-live="polite"` on the log, keyed so a shot inserts one row instead of rewriting all |
+| [18](#18-the-readme-oversold-what-seed-guarantees)                        | `?seed=1` gave two different enemy fleets                                   | `npm run test:e2e`, reusing known cells from last run | One shared RNG stream: randomizing before Engage consumes draws, so the enemy fleet is drawn from a different point                | Documented the load order and the "same actions" caveat; splitting the stream costs more than it buys |
 
 **How things get caught here, roughly in order of how much they found:**
 
@@ -36,7 +38,7 @@ part.
 | ------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------- |
 | Playing the game in a browser         | Manual play, ~40 turns per pass                                                                    | #6, #7                      |
 | Someone else playing it               | A pair of eyes that hadn't seen it before                                                          | #9, #12, #13, #14, #15, #16 |
-| `npm run test:e2e`                    | Playwright, 38 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11, and it missed #14 |
+| `npm run test:e2e`                    | Playwright, 39 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11, #17, #18, and it missed #14 |
 | `npm run sim`                         | 100k headless games per difficulty, measures shot counts                                           | #3                          |
 | `npm run fuzz`                        | Invariant checker over full games (see [#8](#8-what-the-fuzzer-did-not-find))                      | nothing — see #8            |
 | `npm test`                            | 41 unit tests, including AI strength and heat-map shape regressions                                | guarded #3's fix            |
@@ -904,6 +906,92 @@ expect(Number(quoted), `${level} blurb`).toBe(simulate(level, GAMES).median);
 
 Verified by reintroducing the original mistake: setting Admiral back to `~42` fails with
 `hard blurb: expected 42 to be 44`. That class of bug cannot reach the UI again.
+
+## 17. The game was unplayable by ear
+
+**Symptom.** Nothing visibly wrong. But a screen reader never announced the result of a
+shot, so a blind player could fire and get silence back — no hit, no miss, no sink.
+
+**How it was found.** Rewriting the log to render newest-first meant reordering DOM nodes,
+which is exactly the kind of change that breaks assistive tech, so the browser pass was
+asked to check reading order specifically. Reading order was fine (`getBoundingClientRect().top`
+non-decreasing with DOM index — the reason for reversing in the DOM rather than with
+`flex-direction: column-reverse`, which would have inverted it). The check that mattered
+was the one nobody asked for: `document.querySelectorAll("[aria-live]").length` returned
+`0`.
+
+**Root cause.** Two things had to be true at once, which is why it survived this long.
+There _is_ a live region — the status line is `role="status"` — but during battle it only
+ever says:
+
+```ts
+if (battle.aiThinking) return "Enemy is taking aim…";
+return lastEntry ? "Your move." : "Open fire when ready.";
+```
+
+Never what happened. The outcome of a shot is written in exactly one place, the log, and
+that was an inert `<ol>`. Between them the two elements covered neither job: the live
+region had no information, and the information was not in a live region. Pre-existing —
+this predates the reordering work and was not a regression from it.
+
+**Fix.** One attribute, on the element that already holds the text:
+
+```diff
+-      <ol className="log__list" reversed>
++      <ol className="log__list" reversed aria-live="polite">
+```
+
+`polite` rather than `assertive`, so it waits for a pause instead of cutting the user off
+mid-sentence on every shot.
+
+**The part that is easy to get wrong.** A live region announces the nodes that _changed_,
+so this is only one entry per shot if React inserts a row rather than rewriting the text
+of every row. Keying by position on screen would do the latter — with newest-first, screen
+position `0` is a different entry after every shot, so each `<li>` gets new text and a
+screen reader re-reads the entire game history on each turn. The keys are the chronological
+index, taken before the array is reversed, so an insert stays an insert. That was
+invisible before this PR (in chronological order the two indices are identical) and became
+load-bearing the moment the list was reversed.
+
+The test tags every existing row in the DOM, fires a shot, then asserts the tagged rows
+are still there with unchanged text — verifying node identity, not appearance:
+
+```ts
+expect(survivors, "existing rows must be moved, not rewritten").toEqual(before);
+```
+
+Confirmed against both ways of breaking it before being accepted: dropping the attribute
+fails with `unexpected value "null"`, and switching the key to the screen position fails
+the survivor check with `- Expected - 2 / + Received + 2`.
+
+## 18. The README oversold what `?seed=` guarantees
+
+**Symptom.** The docs said a seeded URL fixes the game: "both fleets and every AI choice
+follow from it". Testing found `?seed=1` gave an enemy ship at G1–G2 on a clean load, but
+after clearing the board, placing one ship by hand and hitting Randomize, G1 and G2 were
+open water and the ship had moved to F3–I3. Same seed, different game.
+
+**How it was found.** The browser pass tried to reuse a list of known enemy cells from an
+earlier run to reach a victory quickly, and the shots missed.
+
+**Root cause.** Not a bug in the RNG — it is one deterministic stream, drawn from in load
+order: your opening fleet, each Randomize, the enemy fleet at Engage, then every AI shot.
+Randomizing once more before engaging consumes draws the earlier run did not, so the enemy
+fleet is generated from a different point in the same stream. Reproducible, just not
+independent of what you clicked.
+
+**Why it is a documentation fix and not a code fix.** A separate stream per concern
+(`createRng(seed)`, `createRng(seed + 1)`) would make the enemy fleet immune to your
+placement clicks, but seeds exist here for reproducing bugs and for the E2E tests, and
+both replay a fixed script of actions where the shared stream is already deterministic.
+Splitting it would invalidate every board layout the existing tests depend on to buy
+robustness against a case neither has. The claim was wrong, so the claim was corrected —
+it now states the load order explicitly and says the replay holds "as long as you take the
+same actions". This is the third documented instance ([#3](#3-the-ai-was-measurably-stronger-than-the-number-written-on-the-tin),
+[#13](#13-two-things-the-readme-claimed-that-were-not-true)) of prose about this codebase
+being wrong in a way no test could catch, which is a pattern worth naming: every
+quantitative claim that _can_ be pinned to a test now is, and the ones that cannot are the
+ones to distrust.
 
 ## Things deliberately not "fixed"
 

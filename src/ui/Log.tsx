@@ -23,7 +23,14 @@ export function Log({ entries }: { entries: LogEntry[] }) {
   return (
     <div className="log">
       <h2 className="log__title">Ship&apos;s Log</h2>
-      <ol className="log__list" reversed>
+      {/*
+        The log is the only place a shot's outcome is written down -- the status line
+        says "Your move." and nothing about what just happened -- so without a live
+        region a screen reader plays the game blind. Keys are the chronological index,
+        so a new shot inserts one node rather than rewriting every row's text, and
+        exactly one entry gets announced.
+      */}
+      <ol className="log__list" reversed aria-live="polite">
         {entries.length === 0 && (
           <li className="log__entry log__entry--quiet">Awaiting orders.</li>
         )}

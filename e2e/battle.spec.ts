@@ -125,6 +125,39 @@ test.describe("battle", () => {
     expect(own[1]).toContain("A1");
   });
 
+  // The status line only ever says "Your move." during battle, so the log is the sole
+  // record of what a shot did. Browser testing found it was not a live region at all,
+  // which left the game unplayable by ear. Announcing it correctly also depends on
+  // React inserting one row rather than rewriting every row's text, which reversing
+  // the list would do if the entries were keyed by their position on screen.
+  test("announces new entries without re-reading the old ones", async ({
+    page,
+  }) => {
+    await open(page);
+    await startBattle(page, "Admiral");
+    await exchangeShot(page, 0, 0);
+
+    const list = page.locator("aside ol.log__list");
+    await expect(list).toHaveAttribute("aria-live", "polite");
+
+    const before = await logEntries(page).evaluateAll((items) =>
+      items.map((li, i) => {
+        li.setAttribute("data-seen", String(i));
+        return li.textContent;
+      }),
+    );
+    await exchangeShot(page, 0, 1);
+
+    const survivors = await logEntries(page).evaluateAll((items) =>
+      items
+        .filter((li) => li.hasAttribute("data-seen"))
+        .map((li) => li.textContent),
+    );
+    expect(survivors, "existing rows must be moved, not rewritten").toEqual(
+      before,
+    );
+  });
+
   // Regression: the log scrolled its newest entry into view on every shot, which also
   // scrolled the page whenever the log ran below the fold — yanking the board away
   // mid-game. A short viewport is required to reproduce; a tall one hides it.
