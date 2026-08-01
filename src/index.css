@@ -1,0 +1,22 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: #060d16;
+  -webkit-font-smoothing: antialiased;
+}
+
+body[data-theme="retro"] {
+  background: #010703;
+}
+
+#root {
+  min-height: 100vh;
+}
