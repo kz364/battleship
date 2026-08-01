@@ -32,7 +32,9 @@ export default defineConfig({
     command:
       "npm run build && npm run preview -- --host 127.0.0.1 --port 4173 --strictPort",
     url: "http://127.0.0.1:4173",
-    reuseExistingServer: !process.env.CI,
+    // Never reuse: the command bakes the build in, so an already-running preview would
+    // serve whatever was compiled last time and quietly test the wrong code.
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

@@ -11,34 +11,35 @@ part.
 
 ## Summary
 
-| #                                                                         | Bug                                                                         | How it was found                                   | Root cause                                                                                                                         | Fix                                                                                       |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| [1](#1-npm-test-couldnt-run-at-all-cannot-find-native-binding)            | `npm test` died before running a single test                                | First `npm test` after scaffolding                 | Vite 8 / Vitest 4 preview line bundles native Rolldown binaries; npm's optional-dependency bug skipped the Linux one               | Pinned the stable, pure-JS toolchain: Vite 7, Vitest 3, TS 5.9                            |
-| [2](#2-tsc--b-failed-on-the-simulator-cli)                                | `tsc -b` couldn't find `process`                                            | `npm run typecheck`                                | The CLI is Node code, but only DOM typings were installed                                                                          | Added `@types/node` and a `tsconfig.node.json` project for the non-browser sources        |
-| [3](#3-the-ai-was-measurably-stronger-than-the-number-written-on-the-tin) | Hard AI won in 44 shots where the cited benchmark says 42; medium 53 not 64 | 100k-game `npm run sim`                            | Not a bug. The published figures assume a weaker parity rule and a different fleet; the code was audited for cheating and is clean | Kept the algorithm, corrected the numbers in the UI and pinned them with regression tests |
-| [4](#4-ships-had-a-pink-halo)                                             | Ship sprites had a magenta fringe                                           | Looking at the rendered board                      | Chroma-keying only removed exact-match pixels, leaving anti-aliased edge blends                                                    | Key on `r > g && b > g` and neutralise, rather than matching one colour                   |
-| [5](#5-invalid-css-that-the-build-was-happy-to-ship)                      | Shadows silently missing                                                    | Re-reading the diff                                | Corrupted declarations (`#1d3консольpx`) — CSS discards a bad declaration and carries on                                           | Repaired the declarations                                                                 |
-| [6](#6-the-enemy-fleet-panel-told-you-which-ship-you-had-hit)             | Enemy roster showed live damage pips, so a hit named its ship               | Playing in the browser                             | The roster rendered true damage for both fleets                                                                                    | `concealDamage`: pips only appear once the ship sinks                                     |
-| [7](#7-the-ai-secretly-picked-two-shots-every-turn)                       | AI drew from the RNG twice per turn, so seeded games were unreproducible    | Browser instrumentation of the RNG                 | `chooseShot()` ran inside a `setGame` updater, and React Strict Mode invokes updaters twice                                        | Choose the coordinate before entering the updater                                         |
-| [8](#8-what-the-fuzzer-did-not-find)                                      | (No bug — 6,000 fuzzed games, every invariant held)                         | `npm run fuzz`                                     | —                                                                                                                                  | Kept as a regression net; documents what it cannot see                                    |
-| [9](#9-every-fired-cell-grew-a-second-dot)                                | Two dots on every fired cell in Classic                                     | Someone else playing the deployed game             | The peg socket was a grid **sibling** of the peg instead of sitting behind it                                                      | `position: absolute` on the socket, taking it out of flow                                 |
-| [10](#10-click-a-placed-ship-to-pick-it-up-again-did-nothing)             | Clicking a placed hull did nothing, despite the instruction to              | Scripted browser pass                              | The handler lived on the hull layer, which is deliberately `pointer-events: none`                                                  | Resolve pickup from the cell button via `placementAt()`                                   |
-| [11](#11-retro-wrecks-looked-exactly-like-live-ships)                     | Sunk ships looked identical to live ones in Retro                           | Scripted browser pass, comparing computed `filter` | `.app[data-theme='retro'] .ship img` out-specified `.ship--sunk img`, so the tint was dropped whole                                | Theme-qualified selectors for the sunk, ghost and invalid states                          |
-| [12](#12-a-rejected-placement-said-nothing-at-all)                        | Placing a Carrier at J10 failed silently on touch and keyboard              | Review of the deployed game                        | The only feedback was a hover-only red ghost; the UI ignored `placeShip()` returning `false`                                       | `placementProblem()` explains _why_; the status line announces it and the cells flash     |
-| [13](#13-two-things-the-readme-claimed-that-were-not-true)                | README and a code comment described the AI incorrectly                      | Review, then checked by running the code           | Fleets are random but not uniformly sampled; the empty density map is centre-weighted, not a checkerboard                          | Corrected both, and locked the description down with tests that assert the real shape     |
+| #                                                                         | Bug                                                                         | How it was found                                      | Root cause                                                                                                                         | Fix                                                                                       |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [1](#1-npm-test-couldnt-run-at-all-cannot-find-native-binding)            | `npm test` died before running a single test                                | First `npm test` after scaffolding                    | Vite 8 / Vitest 4 preview line bundles native Rolldown binaries; npm's optional-dependency bug skipped the Linux one               | Pinned the stable, pure-JS toolchain: Vite 7, Vitest 3, TS 5.9                            |
+| [2](#2-tsc--b-failed-on-the-simulator-cli)                                | `tsc -b` couldn't find `process`                                            | `npm run typecheck`                                   | The CLI is Node code, but only DOM typings were installed                                                                          | Added `@types/node` and a `tsconfig.node.json` project for the non-browser sources        |
+| [3](#3-the-ai-was-measurably-stronger-than-the-number-written-on-the-tin) | Hard AI won in 44 shots where the cited benchmark says 42; medium 53 not 64 | 100k-game `npm run sim`                               | Not a bug. The published figures assume a weaker parity rule and a different fleet; the code was audited for cheating and is clean | Kept the algorithm, corrected the numbers in the UI and pinned them with regression tests |
+| [4](#4-ships-had-a-pink-halo)                                             | Ship sprites had a magenta fringe                                           | Looking at the rendered board                         | Chroma-keying only removed exact-match pixels, leaving anti-aliased edge blends                                                    | Key on `r > g && b > g` and neutralise, rather than matching one colour                   |
+| [5](#5-invalid-css-that-the-build-was-happy-to-ship)                      | Shadows silently missing                                                    | Re-reading the diff                                   | Corrupted declarations (`#1d3консольpx`) — CSS discards a bad declaration and carries on                                           | Repaired the declarations                                                                 |
+| [6](#6-the-enemy-fleet-panel-told-you-which-ship-you-had-hit)             | Enemy roster showed live damage pips, so a hit named its ship               | Playing in the browser                                | The roster rendered true damage for both fleets                                                                                    | `concealDamage`: pips only appear once the ship sinks                                     |
+| [7](#7-the-ai-secretly-picked-two-shots-every-turn)                       | AI drew from the RNG twice per turn, so seeded games were unreproducible    | Browser instrumentation of the RNG                    | `chooseShot()` ran inside a `setGame` updater, and React Strict Mode invokes updaters twice                                        | Choose the coordinate before entering the updater                                         |
+| [8](#8-what-the-fuzzer-did-not-find)                                      | (No bug — 6,000 fuzzed games, every invariant held)                         | `npm run fuzz`                                        | —                                                                                                                                  | Kept as a regression net; documents what it cannot see                                    |
+| [9](#9-every-fired-cell-grew-a-second-dot)                                | Two dots on every fired cell in Classic                                     | Someone else playing the deployed game                | The peg socket was a grid **sibling** of the peg instead of sitting behind it                                                      | `position: absolute` on the socket, taking it out of flow                                 |
+| [10](#10-click-a-placed-ship-to-pick-it-up-again-did-nothing)             | Clicking a placed hull did nothing, despite the instruction to              | Scripted browser pass                                 | The handler lived on the hull layer, which is deliberately `pointer-events: none`                                                  | Resolve pickup from the cell button via `placementAt()`                                   |
+| [11](#11-retro-wrecks-looked-exactly-like-live-ships)                     | Sunk ships looked identical to live ones in Retro                           | Scripted browser pass, comparing computed `filter`    | `.app[data-theme='retro'] .ship img` out-specified `.ship--sunk img`, so the tint was dropped whole                                | Theme-qualified selectors for the sunk, ghost and invalid states                          |
+| [12](#12-a-rejected-placement-said-nothing-at-all)                        | Placing a Carrier at J10 failed silently on touch and keyboard              | Review of the deployed game                           | The only feedback was a hover-only red ghost; the UI ignored `placeShip()` returning `false`                                       | `placementProblem()` explains _why_; the status line announces it and the cells flash     |
+| [13](#13-two-things-the-readme-claimed-that-were-not-true)                | README and a code comment described the AI incorrectly                      | Review, then checked by running the code              | Fleets are random but not uniformly sampled; the empty density map is centre-weighted, not a checkerboard                          | Corrected both, and locked the description down with tests that assert the real shape     |
+| [14](#14-the-fix-for-12-reported-every-successful-placement-as-a-failure) | Every _legal_ placement also flashed "can't go there"                       | Browser pass — the new E2E suite was green throughout | `placeShip()` returned a flag captured inside a `setFleet` updater, which React may run after the dispatch returns                 | Decide legality in the callback, before dispatching; assert on the status synchronously   |
 
 **How things get caught here, roughly in order of how much they found:**
 
-| Tool                                  | What it is                                                                                         | What it caught   |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------- |
-| Playing the game in a browser         | Manual play, ~40 turns per pass                                                                    | #6, #7           |
-| Someone else playing it               | A pair of eyes that hadn't seen it before                                                          | #9, #12, #13     |
-| `npm run test:e2e`                    | Playwright, 34 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11         |
-| `npm run sim`                         | 100k headless games per difficulty, measures shot counts                                           | #3               |
-| `npm run fuzz`                        | Invariant checker over full games (see [#8](#8-what-the-fuzzer-did-not-find))                      | nothing — see #8 |
-| `npm test`                            | 40 unit tests, including AI strength and heat-map shape regressions                                | guarded #3's fix |
-| `npm run typecheck` / `npm run build` | tsc + Vite                                                                                         | #2               |
-| Reading the diff back                 | —                                                                                                  | #5               |
+| Tool                                  | What it is                                                                                         | What it caught              |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------- |
+| Playing the game in a browser         | Manual play, ~40 turns per pass                                                                    | #6, #7                      |
+| Someone else playing it               | A pair of eyes that hadn't seen it before                                                          | #9, #12, #13, #14           |
+| `npm run test:e2e`                    | Playwright, 36 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11, and it missed #14 |
+| `npm run sim`                         | 100k headless games per difficulty, measures shot counts                                           | #3                          |
+| `npm run fuzz`                        | Invariant checker over full games (see [#8](#8-what-the-fuzzer-did-not-find))                      | nothing — see #8            |
+| `npm test`                            | 40 unit tests, including AI strength and heat-map shape regressions                                | guarded #3's fix            |
+| `npm run typecheck` / `npm run build` | tsc + Vite                                                                                         | #2                          |
+| Reading the diff back                 | —                                                                                                  | #5                          |
 
 Three of these (#5, #9, #11) are CSS, and none could have been caught by types, lint,
 unit tests or the build — which is why the browser pass that found them is now a
@@ -754,6 +755,73 @@ it("drifts onto a parity as misses accumulate, without being told to", ...)
 **Takeaway.** Every other entry in this log was found by exercising the code. This one was
 found by reading a claim and testing it, which is the one kind of bug no amount of
 gameplay would ever have surfaced.
+
+## 14. The fix for #12 reported every successful placement as a failure
+
+**Symptom.** With [#12](#12-a-rejected-placement-said-nothing-at-all) in place, clear the
+board and click A1. The Carrier lands correctly at A1–E1 and the roster advances — and the
+status line simultaneously turns red with `Carrier can't go at A1.` while the five cells
+under the brand-new hull flash red. Every placement, 4 attempts out of 4.
+
+**How it was found.** A browser pass, immediately after shipping #12. Not by the test
+suite — see below.
+
+**Root cause.** The tell was that the false message was always the _generic fallback_,
+`"<Ship> can't go at <Cell>."`, with no reason appended. So `placementProblem()` was
+looking at the board and correctly finding nothing wrong, while `App` had already decided
+the placement failed. The two disagreed because `placeShip` reported its result from
+inside a state updater:
+
+```ts
+const placeShip = useCallback((placement: Placement): boolean => {
+  let accepted = false;
+  setFleet((current) => {
+    const others = current.filter((p) => p.shipId !== placement.shipId);
+    if (!isLegalPlacement(placement, others)) return current;
+    accepted = true; // runs whenever React decides to run it
+    return [...others, placement];
+  });
+  return accepted; // ...which may well be after this line
+}, []);
+```
+
+React does not promise to run an updater synchronously during the dispatch. It sometimes
+does, which is why this shape had sat there unnoticed since the first commit: nothing read
+the return value. The moment something did, it read `false` every time.
+
+**Fix.** Decide before dispatching, so the answer cannot depend on React's scheduling:
+
+```ts
+const placeShip = useCallback(
+  (placement: Placement): boolean => {
+    const others = fleet.filter((p) => p.shipId !== placement.shipId);
+    if (!isLegalPlacement(placement, others)) return false;
+    setFleet([...others, placement]);
+    return true;
+  },
+  [fleet],
+);
+```
+
+**Why the new E2E suite missed it, which is the actual lesson.** All 34 tests passed with
+this bug firing on every single placement. Playwright's `toContainText` auto-retries, and
+the bogus warning clears itself after 2.2 seconds — so the matcher waited it out and then
+saw the text it wanted. **An auto-retrying assertion cannot see a transient wrong state.**
+Compounding it, the suite only asserted on the rejection _messages_; it never checked that
+a successful placement stays quiet, so it tested the failure path thoroughly and the
+success path not at all.
+
+The regression test therefore reads the status exactly once, with no polling:
+
+```ts
+const state = await page
+  .locator(".app__status")
+  .evaluate((el) => ({ text: el.textContent, className: el.className }));
+expect(state.className).not.toContain("app__status--warning");
+```
+
+It was confirmed to fail against the old `useBattle.ts` before the fix was applied. A
+regression test that has never been seen to fail is just a comment.
 
 ## Things deliberately not "fixed"
 

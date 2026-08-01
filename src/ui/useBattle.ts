@@ -58,16 +58,18 @@ export function useBattle(): Battle {
   const phase: Phase =
     game === null ? "placement" : game.phase === "over" ? "over" : "playing";
 
-  const placeShip = useCallback((placement: Placement): boolean => {
-    let accepted = false;
-    setFleet((current) => {
-      const others = current.filter((p) => p.shipId !== placement.shipId);
-      if (!isLegalPlacement(placement, others)) return current;
-      accepted = true;
-      return [...others, placement];
-    });
-    return accepted;
-  }, []);
+  // Decided out here rather than inside a setFleet updater. React is free to defer an
+  // updater past the dispatch, so a result captured inside one is read back stale — which
+  // made every legal placement report itself as rejected.
+  const placeShip = useCallback(
+    (placement: Placement): boolean => {
+      const others = fleet.filter((p) => p.shipId !== placement.shipId);
+      if (!isLegalPlacement(placement, others)) return false;
+      setFleet([...others, placement]);
+      return true;
+    },
+    [fleet],
+  );
 
   const removeShip = useCallback((shipId: ShipId) => {
     setFleet((current) => current.filter((p) => p.shipId !== shipId));

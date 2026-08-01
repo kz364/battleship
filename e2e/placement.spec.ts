@@ -37,6 +37,25 @@ test.describe("placement", () => {
     expect(loaded.every((width) => width > 0)).toBe(true);
   });
 
+  // Regression: `placeShip` used to report its result from inside a `setFleet` updater,
+  // which React may run after the dispatch returns, so every *successful* placement read
+  // back as rejected and flashed a warning. Auto-retrying matchers cannot see this — the
+  // warning clears itself after 2.2s and `toContainText` simply waits it out — so read the
+  // status the instant the click resolves, once, with no polling.
+  test("says nothing when a placement succeeds", async ({ page }) => {
+    await ownCell(page, 0, 0).click();
+
+    const state = await page
+      .locator(".app__status")
+      .evaluate((el) => ({ text: el.textContent, className: el.className }));
+
+    expect(state.className).not.toContain("app__status--warning");
+    expect(state.text).not.toContain("can't go");
+    expect(state.text).not.toContain("won't fit");
+    expect(await page.locator(".cell--rejected").count()).toBe(0);
+    await expect(hulls(page)).toHaveCount(1);
+  });
+
   test("rotates with the button and with R", async ({ page }) => {
     await page.getByRole("button", { name: "Rotate (R)" }).click();
     await ownCell(page, 0, 0).click();
