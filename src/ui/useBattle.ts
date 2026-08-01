@@ -13,6 +13,19 @@ import { viewOf } from "../ai/view";
 
 const AI_THINKING_MS = 650;
 
+/**
+ * `?seed=123` makes a session reproducible: both fleets and every AI choice follow from
+ * it. Handy for reporting a bug against an exact game, and it is what lets the end-to-end
+ * tests assert on fixed board layouts.
+ */
+function seedFromUrl(): number | undefined {
+  if (typeof window === "undefined") return undefined;
+  const raw = new URLSearchParams(window.location.search).get("seed");
+  if (raw === null) return undefined;
+  const seed = Number(raw);
+  return Number.isFinite(seed) ? seed : undefined;
+}
+
 export type Phase = "placement" | "playing" | "over";
 
 export interface Battle {
@@ -36,7 +49,7 @@ export interface Battle {
 }
 
 export function useBattle(): Battle {
-  const rng = useRef(createRng()).current;
+  const rng = useRef(createRng(seedFromUrl())).current;
   const [difficulty, setDifficulty] = useState<Difficulty>("hard");
   const [fleet, setFleet] = useState<Placement[]>(() => randomFleet(rng));
   const [game, setGame] = useState<GameState | null>(null);

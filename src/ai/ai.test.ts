@@ -160,4 +160,40 @@ describe("chooseShot", () => {
       expect((shot.row + shot.col) % 2).toBe(0);
     }
   });
+
+  // The README used to claim the empty heat map "comes out as a checkerboard". It does
+  // not — it is a centre-weighted bowl, and parity is emergent rather than designed.
+  // These two lock the corrected description down so it cannot drift again.
+  it("scores an empty board as a centre-weighted bowl, not a checkerboard", () => {
+    const map = densityMap(freshView(randomFleet(createRng(31))));
+    const mid = BOARD_SIZE / 2;
+
+    expect(map[0][0]).toBeLessThan(map[mid][mid]);
+    expect(map[mid][mid]).toBe(Math.max(...map.flat()));
+
+    // A checkerboard would put all its weight on one colour. This is even to the point.
+    let even = 0;
+    let odd = 0;
+    map.forEach((cells, row) =>
+      cells.forEach((score, col) => {
+        if ((row + col) % 2 === 0) even += score;
+        else odd += score;
+      }),
+    );
+    expect(even).toBe(odd);
+  });
+
+  it("drifts onto a parity as misses accumulate, without being told to", () => {
+    const rng = createRng(1);
+    let view = freshView(randomFleet(createRng(31)));
+    const colours = [0, 0];
+
+    for (let i = 0; i < 30; i++) {
+      const shot = chooseShot(view, "hard", rng);
+      colours[(shot.row + shot.col) % 2] += 1;
+      view = withShots(view, [[shot.row, shot.col, "miss"]]);
+    }
+
+    expect(Math.max(...colours)).toBeGreaterThan(20);
+  });
 });

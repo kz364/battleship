@@ -16,7 +16,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Publishing is gated on the same checks CI runs, rather than merely building. Calling
+  # the shared workflow (instead of keying off CI's result) means a manual dispatch is
+  # gated too, and there is only one definition of the checks to keep in step.
+  checks:
+    uses: ./.github/workflows/checks.yml
+
   build:
+    needs: checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

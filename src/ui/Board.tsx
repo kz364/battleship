@@ -22,6 +22,10 @@ interface BoardProps {
   /** Extra layers drawn over the grid, e.g. the placement ghost. */
   overlay?: ReactNode;
   lastShot?: Coord | null;
+  /** Cells to flag briefly, e.g. where a ship could not be placed. */
+  flashCells?: readonly Coord[];
+  /** Changing this restarts the flash, so repeating the same mistake re-animates. */
+  flashKey?: number;
   label: string;
 }
 
@@ -34,11 +38,14 @@ export function Board({
   onCellLeave,
   overlay,
   lastShot,
+  flashCells,
+  flashKey,
   label,
 }: BoardProps) {
   const visibleShips = board.placements.filter(
     (p) => revealShips || isSunk(board, p.shipId),
   );
+  const flashed = new Set(flashCells?.map((c) => `${c.row},${c.col}`));
 
   return (
     <div className="board" aria-label={label}>
@@ -63,18 +70,22 @@ export function Board({
           INDEXES.map((col) => {
             const shot = board.shots[row][col];
             const isLast = lastShot?.row === row && lastShot?.col === col;
+            const isFlashed = flashed.has(`${row},${col}`);
             const classes = [
               "cell",
               shot ? `cell--${shot}` : "",
               interactive && !shot ? "cell--targetable" : "",
               isLast ? "cell--latest" : "",
+              isFlashed ? "cell--rejected" : "",
             ]
               .filter(Boolean)
               .join(" ");
 
             return (
               <button
-                key={`${row}-${col}`}
+                // Remounting a flagged cell restarts its animation, which is what makes
+                // a repeat of the same illegal placement flash again.
+                key={`${row}-${col}${isFlashed ? `-${flashKey}` : ""}`}
                 type="button"
                 className={classes}
                 disabled={!interactive || shot !== null}

@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createBoard, isLegalPlacement, placementAt } from "./engine/board";
+import {
+  cellsFor,
+  createBoard,
+  isLegalPlacement,
+  placementAt,
+  placementProblem,
+} from "./engine/board";
 import {
   FLEET,
+  coordLabel,
   type Coord,
   type Orientation,
   type Placement,
@@ -22,6 +29,37 @@ import "./styles/app.css";
 
 const DIFFICULTIES: Difficulty[] = ["easy", "medium", "hard"];
 
+/** How long a rejected placement stays announced and highlighted. */
+const REJECTION_MS = 2200;
+
+interface Rejection {
+  message: string;
+  /** The cells the ship would have covered, highlighted so the reason is visible. */
+  cells: Coord[];
+  nonce: number;
+}
+
+function describeProblem(
+  shipName: string,
+  placement: Placement,
+  others: readonly Placement[],
+): string {
+  const problem = placementProblem(placement, others);
+  const at = coordLabel(placement.row, placement.col);
+
+  if (problem?.kind === "off-board") {
+    const noun = problem.overhang === 1 ? "cell" : "cells";
+    return `${shipName} won't fit at ${at} — it hangs ${problem.overhang} ${noun} off the board. Rotate it, or start further in.`;
+  }
+
+  if (problem?.kind === "overlap") {
+    const blocker = FLEET.find((s) => s.id === problem.blockedBy);
+    return `${shipName} can't go at ${at} — the ${blocker?.name ?? "another ship"} is in the way. Ships may touch, but not overlap.`;
+  }
+
+  return `${shipName} can't go at ${at}.`;
+}
+
 export default function App() {
   const battle = useBattle();
   const { theme, toggleTheme } = useTheme();
@@ -29,6 +67,7 @@ export default function App() {
   const [selected, setSelected] = useState<ShipId | null>(FLEET[0].id);
   const [orientation, setOrientation] = useState<Orientation>("horizontal");
   const [hover, setHover] = useState<Coord | null>(null);
+  const [rejection, setRejection] = useState<Rejection | null>(null);
 
   const placedIds = useMemo(
     () => new Set(battle.fleet.map((p) => p.shipId)),
@@ -83,6 +122,14 @@ export default function App() {
     [battle.fleet],
   );
 
+  // The red ghost only tells you a placement is illegal if you have a pointer that can
+  // hover. Touch and keyboard users get the same information from a rejection instead.
+  useEffect(() => {
+    if (!rejection) return;
+    const timer = setTimeout(() => setRejection(null), REJECTION_MS);
+    return () => clearTimeout(timer);
+  }, [rejection]);
+
   const handlePlacementClick = (coord: Coord) => {
     // Clicking a hull picks that ship back up. The hull sprites sit in a
     // pointer-events:none layer beneath the cell buttons, so the cell has to resolve
@@ -96,12 +143,26 @@ export default function App() {
     if (!selected) return;
     const spec = FLEET.find((s) => s.id === selected);
     if (!spec) return;
-    battle.placeShip({
+
+    const placement: Placement = {
       shipId: spec.id,
       length: spec.length,
       row: coord.row,
       col: coord.col,
       orientation,
+    };
+
+    if (battle.placeShip(placement)) {
+      setRejection(null);
+      return;
+    }
+
+    const others = battle.fleet.filter((p) => p.shipId !== spec.id);
+    setRejection({
+      message: describeProblem(spec.name, placement, others),
+      cells: cellsFor(placement),
+      // Re-clicking the same bad cell should replay the flash rather than sit inert.
+      nonce: Date.now(),
     });
   };
 
@@ -121,6 +182,7 @@ export default function App() {
 
   const statusText = (() => {
     if (battle.phase === "placement") {
+      if (rejection) return rejection.message;
       return unplaced.length > 0
         ? `Position your fleet — ${unplaced.length} ship${unplaced.length === 1 ? "" : "s"} to go.`
         : "Fleet ready. Engage when you are.";
@@ -168,7 +230,10 @@ export default function App() {
       </header>
 
       <p className="app__blurb">{DIFFICULTY_BLURBS[battle.difficulty]}</p>
-      <p className="app__status" role="status">
+      <p
+        className={`app__status${rejection ? " app__status--warning" : ""}`}
+        role="status"
+      >
         {statusText}
       </p>
 
@@ -182,6 +247,8 @@ export default function App() {
             onCellClick={handlePlacementClick}
             onCellEnter={setHover}
             onCellLeave={() => setHover(null)}
+            flashKey={rejection?.nonce}
+            flashCells={rejection?.cells}
             lastShot={
               lastAiShot ? { row: lastAiShot.row, col: lastAiShot.col } : null
             }
