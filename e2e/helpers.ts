@@ -34,9 +34,16 @@ export const status = (page: Page) => page.getByRole("status");
 export const hulls = (page: Page) =>
   page.locator(".board__ships .ship:not(.ship--ghost)");
 
-/** Real shots only — the list also holds an "Awaiting orders." placeholder when empty. */
+/**
+ * Real shots only — the list also holds an "Awaiting orders." placeholder when empty.
+ * The log renders newest first, so index 0 is the most recent shot, not the opening one.
+ */
 export const logEntries = (page: Page) =>
   page.locator("aside ol li.log__entry:not(.log__entry--quiet)");
+
+/** Most recent entry for one side, which survives the AI not having replied yet. */
+export const latestLogEntry = (page: Page, side: "player" | "ai") =>
+  page.locator(`aside ol li.log__entry--${side}`).first();
 
 /**
  * A fixed seed makes both fleets and every AI choice reproducible, so tests can assert on

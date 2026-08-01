@@ -27,17 +27,19 @@ part.
 | [12](#12-a-rejected-placement-said-nothing-at-all)                        | Placing a Carrier at J10 failed silently on touch and keyboard              | Review of the deployed game                           | The only feedback was a hover-only red ghost; the UI ignored `placeShip()` returning `false`                                       | `placementProblem()` explains _why_; the status line announces it and the cells flash     |
 | [13](#13-two-things-the-readme-claimed-that-were-not-true)                | README and a code comment described the AI incorrectly                      | Review, then checked by running the code              | Fleets are random but not uniformly sampled; the empty density map is centre-weighted, not a checkerboard                          | Corrected both, and locked the description down with tests that assert the real shape     |
 | [14](#14-the-fix-for-12-reported-every-successful-placement-as-a-failure) | Every _legal_ placement also flashed "can't go there"                       | Browser pass — the new E2E suite was green throughout | `placeShip()` returned a flag captured inside a `setFleet` updater, which React may run after the dispatch returns                 | Decide legality in the callback, before dispatching; assert on the status synchronously   |
+| [15](#15-the-log-scrolled-the-page-out-from-under-you)                    | Each new log entry scrolled the whole page down mid-game                    | Someone else playing it                               | The log called `scrollIntoView` to follow its newest entry, which scrolls _every_ scrollable ancestor, the document included       | Show newest first, so there is nothing to scroll to                                       |
+| [16](#16-the-difficulty-blurbs-did-not-say-whose-fleet-was-being-sunk)    | "~53 shots" did not say whose shots, and Easy was worded differently        | Someone else playing it                               | The blurb quoted a number with no subject, so it read as the player's budget                                                       | One phrasing across all three, and a test pinning each number to the simulator            |
 
 **How things get caught here, roughly in order of how much they found:**
 
 | Tool                                  | What it is                                                                                         | What it caught              |
 | ------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------- |
 | Playing the game in a browser         | Manual play, ~40 turns per pass                                                                    | #6, #7                      |
-| Someone else playing it               | A pair of eyes that hadn't seen it before                                                          | #9, #12, #13, #14           |
-| `npm run test:e2e`                    | Playwright, 36 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11, and it missed #14 |
+| Someone else playing it               | A pair of eyes that hadn't seen it before                                                          | #9, #12, #13, #14, #15, #16 |
+| `npm run test:e2e`                    | Playwright, 38 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11, and it missed #14 |
 | `npm run sim`                         | 100k headless games per difficulty, measures shot counts                                           | #3                          |
 | `npm run fuzz`                        | Invariant checker over full games (see [#8](#8-what-the-fuzzer-did-not-find))                      | nothing — see #8            |
-| `npm test`                            | 40 unit tests, including AI strength and heat-map shape regressions                                | guarded #3's fix            |
+| `npm test`                            | 41 unit tests, including AI strength and heat-map shape regressions                                | guarded #3's fix            |
 | `npm run typecheck` / `npm run build` | tsc + Vite                                                                                         | #2                          |
 | Reading the diff back                 | —                                                                                                  | #5                          |
 
@@ -823,6 +825,86 @@ expect(state.className).not.toContain("app__status--warning");
 It was confirmed to fail against the old `useBattle.ts` before the fix was applied. A
 regression test that has never been seen to fail is just a comment.
 
+## 15. The log scrolled the page out from under you
+
+**Symptom.** Every shot scrolled the whole page down a little. On a laptop-height window
+the boards would drift off the top of the screen mid-game, so you had to scroll back up to
+take your next turn.
+
+**How it was found.** Reported by someone playing the deployed game — the same route as
+[#9](#9-every-fired-cell-grew-a-second-dot) and [#12](#12-a-rejected-placement-said-nothing-at-all).
+Everything found this way has been visual or interaction behaviour, never game logic, which
+is the pattern worth noticing: the engine is the part the tests actually cover.
+
+**Root cause.** The log kept its newest entry visible by scrolling to it:
+
+```tsx
+const endRef = useRef<HTMLLIElement>(null);
+useEffect(() => {
+  endRef.current?.scrollIntoView({ block: "nearest" });
+}, [entries.length]);
+```
+
+`.log__list` is its own scroll container (`max-height` + `overflow-y: auto`), so the intent
+was to scroll only that. But `scrollIntoView` scrolls **every** scrollable ancestor needed
+to bring the element into the viewport, and the document is one of them. `block: "nearest"`
+limits how far each one scrolls, not which ones scroll. So whenever the log ran below the
+fold — which is exactly when the window is short — the page came along too.
+
+**Fix.** Render the log newest-first and delete the effect. Nothing needs to be scrolled to
+if the entry you care about is already at the top:
+
+```tsx
+const newestFirst = entries.map((entry, index) => ({ entry, index })).reverse();
+```
+
+The reverse happens in the DOM rather than with `flex-direction: column-reverse`, so that
+what a screen reader announces stays in the same order as what is on screen.
+
+**Regression test.** The bug is invisible on a tall viewport, so the test forces a short
+one and asserts the page has not moved, having first checked the page _can_ move — an
+assertion that the scroll position is 0 proves nothing on a window with no scrollbar:
+
+```ts
+await page.setViewportSize({ width: 900, height: 600 });
+expect(scrollable, "viewport must be short enough to scroll").toBe(true);
+for (let col = 0; col < 3; col++) await exchangeShot(page, 0, col);
+expect(await page.evaluate(() => window.scrollY)).toBe(0);
+```
+
+Confirmed to fail against the old component first: `Expected: 0, Received: 340`.
+
+## 16. The difficulty blurbs did not say whose fleet was being sunk
+
+**Symptom.** Picking an opponent showed, for example, `Hunts on a checkerboard, then
+finishes what it starts. ~53 shots.` A number with no subject: it reads as _your_ budget
+rather than how long the AI takes to sink _you_, and Easy's phrasing ("Clears a board in
+~97 shots") did not match the other two, so there was nothing to compare against.
+
+**How it was found.** Reported by the same person playing the game — not a defect, but the
+text failing to say the thing it existed to say.
+
+**Fix.** One phrasing across all three levels, naming the subject:
+
+```diff
+-  medium: "Hunts on a checkerboard, then finishes what it starts. ~53 shots.",
++  medium: "Hunts on a checkerboard, then finishes what it starts. Sinks your fleet in ~53 shots.",
+```
+
+**Why this got a test.** [#13](#13-two-things-the-readme-claimed-that-were-not-true) was a
+stale `~42` that had drifted from the real median of 44, and nothing could have caught it
+because it lived in a comment. These blurbs are the _user-facing_ version of exactly that
+claim, so they are now checked against the simulator rather than trusted. `simulate` is
+seeded, so the assertion is exact rather than a tolerance:
+
+```ts
+const quoted = DIFFICULTY_BLURBS[level].match(/~(\d+) shots/)?.[1];
+expect(Number(quoted), `${level} blurb`).toBe(simulate(level, GAMES).median);
+```
+
+Verified by reintroducing the original mistake: setting Admiral back to `~42` fails with
+`hard blurb: expected 42 to be 44`. That class of bug cannot reach the UI again.
+
 ## Things deliberately not "fixed"
 
 - **The fleet sampler is not made uniform.** See [#13](#13-two-things-the-readme-claimed-that-were-not-true):
@@ -834,6 +916,15 @@ regression test that has never been seen to fail is just a comment.
   heat map with a learned placement prior. Left out: it needs real human game data, and
   self-play would actively mislead it, since the AI would only learn to counter its own
   uniform placement.
+- **Sinking a ship names it.** Queried as a possible information leak: does the real game
+  tell you _which_ ship you just sank? It does, and it is the one line everybody quotes —
+  "You sank my battleship!" [Hasbro's rules](https://instructions.hasbro.com/en-au/instruction/battleship)
+  and every restatement of them require the defender to announce which ship went down, and
+  that information is load-bearing: knowing a sunk ship's length is what lets you rule out
+  placements for the rest of the fleet. So `Log` names the ship on a sink and says only
+  "hit" before that — matching the enemy roster, which shows no damage pips until a ship
+  goes down. The `keeps enemy damage secret until a ship sinks` E2E test pins that boundary
+  in both directions. Concealing the name would be a non-standard hard mode, not a fix.
 - **Ships may touch.** Some house rules forbid adjacent ships. The standard Hasbro rules
   allow it, `isLegalPlacement` allows it, and the AI's density map assumes it — changing
   this means changing all three together, so it stays as the standard rule.

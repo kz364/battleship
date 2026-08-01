@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import type { LogEntry } from "../engine/game";
 import { coordLabel, specFor } from "../engine/types";
 
@@ -13,25 +12,25 @@ function describe(entry: LogEntry): string {
     : `${who} fired at ${target} — your ${ship} is sunk!`;
 }
 
+// Newest first, so the entry you care about is always at the top of the panel. The
+// previous chronological order needed scrollIntoView to keep up, which also scrolled
+// every scrollable ancestor -- including the page, whenever the log ran below the fold.
 export function Log({ entries }: { entries: LogEntry[] }) {
-  const endRef = useRef<HTMLLIElement>(null);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "nearest" });
-  }, [entries.length]);
+  const newestFirst = entries
+    .map((entry, index) => ({ entry, index }))
+    .reverse();
 
   return (
     <div className="log">
       <h2 className="log__title">Ship&apos;s Log</h2>
-      <ol className="log__list">
+      <ol className="log__list" reversed>
         {entries.length === 0 && (
           <li className="log__entry log__entry--quiet">Awaiting orders.</li>
         )}
-        {entries.map((entry, index) => (
+        {newestFirst.map(({ entry, index }) => (
           <li
             key={index}
             className={`log__entry log__entry--${entry.side} log__entry--${entry.result}`}
-            ref={index === entries.length - 1 ? endRef : undefined}
           >
             {describe(entry)}
           </li>

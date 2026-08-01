@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { simulate } from "./simulate";
+import { DIFFICULTY_BLURBS, type Difficulty } from "../ai/strategies";
 
 /**
  * Strength regression test. If a refactor quietly breaks the placement enumeration or the
@@ -41,4 +42,20 @@ describe("AI strength", () => {
     expect(simulate("easy", 200).max).toBeLessThanOrEqual(100);
     expect(simulate("hard", 200).max).toBeLessThanOrEqual(100);
   }, 30_000);
+
+  /**
+   * The UI tells the player how many shots each opponent needs. Review caught a stale
+   * "~42" in a comment that no test could have found, so the user-facing version of the
+   * same claim is held to the measurement instead. `simulate` is seeded, so this is exact
+   * rather than tolerance-based, and it fails the moment a blurb and the AI disagree.
+   */
+  it("quotes shot counts the AI actually achieves", () => {
+    for (const level of ["easy", "medium", "hard"] satisfies Difficulty[]) {
+      const quoted = DIFFICULTY_BLURBS[level].match(/~(\d+) shots/)?.[1];
+      expect(quoted, `${level} blurb must quote a shot count`).toBeDefined();
+      expect(Number(quoted), `${level} blurb`).toBe(
+        simulate(level, GAMES).median,
+      );
+    }
+  }, 120_000);
 });

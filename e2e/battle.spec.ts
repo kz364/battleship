@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   enemyCell,
   exchangeShot,
+  latestLogEntry,
   logEntries,
   open,
   startBattle,
@@ -20,7 +21,9 @@ test.describe("battle", () => {
     }
 
     const sides = await logEntries(page).evaluateAll((items) =>
-      items.map((li) => (li.className.includes("--player") ? "you" : "enemy")),
+      items
+        .map((li) => (li.className.includes("--player") ? "you" : "enemy"))
+        .reverse(),
     );
     expect(sides).toHaveLength(12);
     expect(sides.join(",")).toBe(
@@ -97,9 +100,9 @@ test.describe("battle", () => {
     for (let row = 0; row < 10 && hits === 0; row++) {
       for (let col = 0; col < 10 && hits === 0; col++) {
         await exchangeShot(page, row, col);
-        const last = await logEntries(page).nth(-2).textContent();
-        if (last?.includes("hit!")) hits += 1;
-        if (last?.includes("sank")) return; // sank on the first hit; nothing to assert
+        const own = await latestLogEntry(page, "player").textContent();
+        if (own?.includes("hit!")) hits += 1;
+        if (own?.includes("sank")) return; // sank on the first hit; nothing to assert
       }
     }
     expect(hits).toBe(1);
@@ -110,12 +113,43 @@ test.describe("battle", () => {
     await expect(enemyPips).toHaveCount(0);
   });
 
+  test("lists the newest entry first", async ({ page }) => {
+    await open(page);
+    await startBattle(page, "Admiral");
+    await exchangeShot(page, 0, 0);
+    await exchangeShot(page, 0, 1);
+
+    const texts = await logEntries(page).allTextContents();
+    const own = texts.filter((t) => t.startsWith("You fired"));
+    expect(own[0]).toContain("B1");
+    expect(own[1]).toContain("A1");
+  });
+
+  // Regression: the log scrolled its newest entry into view on every shot, which also
+  // scrolled the page whenever the log ran below the fold — yanking the board away
+  // mid-game. A short viewport is required to reproduce; a tall one hides it.
+  test("does not scroll the page when an entry arrives", async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 600 });
+    await open(page);
+    await startBattle(page, "Admiral");
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const scrollable = await page.evaluate(
+      () => document.documentElement.scrollHeight > window.innerHeight,
+    );
+    expect(scrollable, "viewport must be short enough to scroll").toBe(true);
+
+    for (let col = 0; col < 3; col++) await exchangeShot(page, 0, col);
+
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  });
+
   test("announces enemy fire against your own fleet", async ({ page }) => {
     await open(page);
     await startBattle(page, "Admiral");
     await exchangeShot(page, 0, 0);
 
-    await expect(logEntries(page).last()).toContainText("Enemy fired at");
+    await expect(logEntries(page).first()).toContainText("Enemy fired at");
     await expect(status(page)).toContainText("Your move.");
   });
 });
