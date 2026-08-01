@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -7,4 +8,6 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   base: "./",
   plugins: [react()],
+  // `e2e/` is Playwright's; vitest would otherwise try to run those specs itself.
+  test: { include: ["src/**/*.test.ts"] },
 });

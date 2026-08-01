@@ -4,6 +4,7 @@ import {
   cellsFor,
   createBoard,
   isLegalPlacement,
+  placementProblem,
   placementAt,
   randomFleet,
 } from "./board";
@@ -66,6 +67,49 @@ describe("placement", () => {
     expect(isLegalPlacement(destroyer(BOARD_SIZE - 1, 0, "vertical"), [])).toBe(
       false,
     );
+  });
+
+  it("explains why a placement was rejected", () => {
+    const cruiser: Placement = {
+      shipId: "cruiser",
+      length: 3,
+      row: 5,
+      col: 5,
+      orientation: "horizontal",
+    };
+
+    expect(placementProblem(destroyer(0, 0), [cruiser])).toBeNull();
+    expect(placementProblem(destroyer(0, BOARD_SIZE - 1), [])).toEqual({
+      kind: "off-board",
+      overhang: 1,
+    });
+    expect(placementProblem(destroyer(5, 6), [cruiser])).toEqual({
+      kind: "overlap",
+      blockedBy: "cruiser",
+    });
+  });
+
+  it("reports running off the edge before reporting an overlap", () => {
+    // The UI advises rotating when a ship overhangs, which is the wrong advice if the
+    // real obstacle is another hull, so the order these are checked in is load-bearing.
+    const carrier: Placement = {
+      shipId: "carrier",
+      length: 5,
+      row: 0,
+      col: BOARD_SIZE - 2,
+      orientation: "horizontal",
+    };
+    const blocker: Placement = {
+      shipId: "cruiser",
+      length: 3,
+      row: 0,
+      col: BOARD_SIZE - 1,
+      orientation: "vertical",
+    };
+    expect(placementProblem(carrier, [blocker])).toEqual({
+      kind: "off-board",
+      overhang: 3,
+    });
   });
 
   it("rejects overlaps but allows touching", () => {
