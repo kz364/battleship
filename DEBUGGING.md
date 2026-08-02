@@ -19,7 +19,7 @@ offending code inline, is in the [full appendix](docs/debugging-appendix.md).
 | `npm run fuzz` (6,000 full games, every invariant)  | 0 — see the appendix on [what a fuzzer cannot see][fuzz] |
 
 The distribution is the honest lesson. Types, lint, unit tests and a fuzzer between them
-found three bugs; a person clicking around found eleven. Six of the visual defects lived
+found three bugs; a person clicking around found thirteen. Six of the visual defects lived
 entirely in CSS, where no type system was ever going to look — which is why the browser
 pass that found them is now a committed Playwright suite asserting on computed styles and
 geometry in both themes, not an anecdote about a session.

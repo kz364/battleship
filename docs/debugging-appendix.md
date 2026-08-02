@@ -50,8 +50,8 @@ part.
 | Tool                                  | What it is                                                                                         | What it caught                                       |
 | ------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | Playing the game in a browser         | Manual play, ~40 turns per pass                                                                    | #6, #7                                               |
-| Someone else playing it               | A pair of eyes that hadn't seen it before                                                          | #9, #12, #13, #14, #15, #16, #19, #21, #22, #23, #24 |
-| `npm run test:e2e`                    | Playwright, 60 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11, #17, #18, and it missed #14                |
+| Someone else playing it               | A pair of eyes that hadn't seen it before                                                          | #9, #12, #13, #14, #15, #16, #19, #21, #22, #23, #24, #30, #31 |
+| `npm run test:e2e`                    | Playwright, 64 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11, #17, #18, and it missed #14                |
 | `npm run sim`                         | 100k headless games per difficulty, measures shot counts                                           | #3                                                   |
 | `npm run fuzz`                        | Invariant checker over full games (see [#8](#8-what-the-fuzzer-did-not-find))                      | nothing — see #8                                     |
 | `npm test`                            | 49 unit tests, including AI strength, heat-map and ship-asset regressions                          | guarded #3 and the sprite-size contract              |
