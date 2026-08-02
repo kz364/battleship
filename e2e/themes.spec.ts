@@ -54,8 +54,10 @@ test.describe("themes", () => {
       await ownCell(page, 0, 0).click();
       const live = await shipStyles(page, ".ship:not(.ship--ghost)");
 
-      // Hovering an occupied run gives a ghost that overlaps, so it renders invalid.
-      await ownCell(page, 0, 1).hover();
+      // Hovering an empty square where the ship would not fit: a ghost, rendered invalid.
+      // It has to be an empty one — over a hull the click picks that ship up instead, so
+      // no ghost is drawn there at all.
+      await ownCell(page, 0, 9).hover();
       await expect(page.locator(".ship--ghost")).toBeVisible();
       const ghost = await shipStyles(page, ".ship--ghost");
 

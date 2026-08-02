@@ -7,13 +7,21 @@ interface ShipProps {
   ghost?: boolean;
   invalid?: boolean;
   sunk?: boolean;
+  /** Picked out on the board, e.g. while the pointer is over it or its roster row. */
+  highlighted?: boolean;
 }
 
 /**
  * A ship laid over the grid. Position and size are expressed in `--cell` units so the
  * sprite always lines up with the squares underneath, at any board size.
  */
-export function Ship({ placement, ghost, invalid, sunk }: ShipProps) {
+export function Ship({
+  placement,
+  ghost,
+  invalid,
+  sunk,
+  highlighted,
+}: ShipProps) {
   const vertical = placement.orientation === "vertical";
   const spanAcross = vertical ? 1 : placement.length;
   const spanDown = vertical ? placement.length : 1;
@@ -23,6 +31,7 @@ export function Ship({ placement, ghost, invalid, sunk }: ShipProps) {
     ghost ? "ship--ghost" : "",
     invalid ? "ship--invalid" : "",
     sunk ? "ship--sunk" : "",
+    highlighted ? "ship--highlighted" : "",
   ]
     .filter(Boolean)
     .join(" ");

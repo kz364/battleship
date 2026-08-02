@@ -8,6 +8,9 @@ interface RosterProps {
   placed?: Set<ShipId>;
   selected?: ShipId | null;
   onSelect?: (shipId: ShipId) => void;
+  /** Reports the row under the pointer, so the board can pick that ship out. */
+  onHover?: (shipId: ShipId | null) => void;
+  highlighted?: ShipId | null;
   /** Board to read damage from, during battle. */
   board?: Board;
   /**
@@ -22,6 +25,8 @@ export function Roster({
   placed,
   selected,
   onSelect,
+  onHover,
+  highlighted,
   board,
   concealDamage,
 }: RosterProps) {
@@ -39,6 +44,7 @@ export function Roster({
             sunk ? "roster__item--sunk" : "",
             isPlaced ? "roster__item--placed" : "",
             selected === spec.id ? "roster__item--selected" : "",
+            highlighted === spec.id ? "roster__item--highlighted" : "",
             onSelect ? "roster__item--clickable" : "",
           ]
             .filter(Boolean)
@@ -51,6 +57,10 @@ export function Roster({
                 className={classes}
                 disabled={!onSelect}
                 onClick={() => onSelect?.(spec.id)}
+                onPointerEnter={() => onHover?.(spec.id)}
+                onPointerLeave={() => onHover?.(null)}
+                onFocus={() => onHover?.(spec.id)}
+                onBlur={() => onHover?.(null)}
               >
                 <img
                   className="roster__sprite"

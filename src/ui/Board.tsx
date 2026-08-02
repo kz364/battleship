@@ -1,9 +1,11 @@
 import { type ReactNode } from "react";
 import { isSunk } from "../engine/game";
+import { cellsFor } from "../engine/board";
 import {
   BOARD_SIZE,
   type Board as BoardModel,
   type Coord,
+  type ShipId,
   coordLabel,
 } from "../engine/types";
 import { Ship } from "./Ship";
@@ -26,6 +28,13 @@ interface BoardProps {
   flashCells?: readonly Coord[];
   /** Changing this restarts the flash, so repeating the same mistake re-animates. */
   flashKey?: number;
+  /** Ship to pick out, with its squares outlined. */
+  highlightShip?: ShipId | null;
+  /**
+   * Shot count when this board was last hit, or null. Only its parity is used: alternating
+   * the class is what restarts the animation, since re-adding the same class does not.
+   */
+  shakeKey?: number | null;
   label: string;
 }
 
@@ -40,6 +49,8 @@ export function Board({
   lastShot,
   flashCells,
   flashKey,
+  highlightShip,
+  shakeKey,
   label,
 }: BoardProps) {
   const visibleShips = board.placements.filter(
@@ -47,8 +58,21 @@ export function Board({
   );
   const flashed = new Set(flashCells?.map((c) => `${c.row},${c.col}`));
 
+  const highlighted = new Set(
+    visibleShips
+      .filter((p) => p.shipId === highlightShip)
+      .flatMap((p) => cellsFor(p).map((c) => `${c.row},${c.col}`)),
+  );
+
+  const shake =
+    shakeKey == null
+      ? ""
+      : shakeKey % 2 === 0
+        ? "board--struck-even"
+        : "board--struck-odd";
+
   return (
-    <div className="board" aria-label={label}>
+    <div className={`board ${shake}`.trim()} aria-label={label}>
       <div className="board__corner" />
       <div className="board__cols">
         {INDEXES.map((col) => (
@@ -77,6 +101,7 @@ export function Board({
               interactive && !shot ? "cell--targetable" : "",
               isLast ? "cell--latest" : "",
               isFlashed ? "cell--rejected" : "",
+              highlighted.has(`${row},${col}`) ? "cell--highlighted" : "",
             ]
               .filter(Boolean)
               .join(" ");
@@ -105,6 +130,7 @@ export function Board({
               key={placement.shipId}
               placement={placement}
               sunk={isSunk(board, placement.shipId)}
+              highlighted={placement.shipId === highlightShip}
             />
           ))}
           {overlay}
