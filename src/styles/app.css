@@ -653,10 +653,17 @@ kbd {
   opacity: 0.75;
 }
 
-/* Same specificity dance as the tints above: the retro hull rule would otherwise win. */
-.ship--highlighted img,
-.app[data-theme="retro"] .ship--highlighted img {
+/* Same specificity dance as the tints above: the retro hull rule would otherwise win.
+   Retro repeats its phosphor recolour rather than dropping it, or the ship you point at
+   is the one hull on the console rendered in grey. */
+.ship--highlighted img {
   filter: brightness(1.35) drop-shadow(0 0 6px var(--accent));
+  opacity: 1;
+}
+
+.app[data-theme="retro"] .ship--highlighted img {
+  filter: grayscale(1) brightness(1.5) sepia(1) hue-rotate(65deg) saturate(2.5)
+    drop-shadow(0 0 6px var(--accent));
   opacity: 1;
 }
 

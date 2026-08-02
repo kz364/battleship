@@ -98,6 +98,29 @@ test.describe("themes", () => {
       expect(invalid.filter).not.toBe(live.filter);
     });
 
+    // The highlight replaces the hull's whole filter, and retro's phosphor recolour lives
+    // in that same property — dropping it renders the pointed-at ship grey on a green console.
+    test(`keeps the ${theme} skin on a hull under the pointer`, async ({
+      page,
+    }) => {
+      await open(page);
+      if (theme === "retro") {
+        await page.getByRole("button", { name: "Retro mode" }).click();
+      }
+      await page.getByRole("button", { name: "Clear" }).click();
+      await ownCell(page, 0, 0).click();
+
+      const live = await shipStyles(page, ".ship:not(.ship--ghost)");
+      await ownCell(page, 0, 2).hover();
+      const lit = await shipStyles(page, ".ship--highlighted");
+
+      expect(lit.filter).not.toBe(live.filter);
+      expect(lit.opacity).toBe("1");
+      if (theme === "retro") {
+        expect(lit.filter).toContain("hue-rotate");
+      }
+    });
+
     test(`dims sunk hulls in ${theme}`, async ({ page }) => {
       test.slow();
       await open(page);
