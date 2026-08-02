@@ -93,9 +93,12 @@ none of those are reachable from a unit test. So it asserts on computed styles a
 geometry rather than on screenshots, and covers placement, pickup, turn alternation,
 victory and replay, both themes, and a phone viewport.
 
-Add `?seed=123` to the URL to make a session reproducible: both fleets and every AI choice
-follow from it. That is how the tests get fixed board layouts, and it is the easiest way
-to report a bug against an exact game.
+Add `?seed=123` to the URL to make a session reproducible. One seeded stream feeds every
+draw in load order — your opening fleet, each Randomize, the enemy fleet at Engage, then
+each AI shot — so the same seed replays exactly as long as you take the same actions.
+Randomizing an extra time before engaging shifts the enemy fleet, because it consumes a
+draw the previous run did not. That is how the tests get fixed board layouts, and it is
+the easiest way to report a bug against an exact game — quote the seed and the clicks.
 
 ## Code layout
 

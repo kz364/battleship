@@ -11,10 +11,15 @@ export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   hard: "Admiral",
 };
 
+/**
+ * Shot counts are measured medians over 100k games per level (`npm run sim`), and say
+ * whose fleet is being sunk: a bare "~53 shots" reads like the player's budget.
+ */
 export const DIFFICULTY_BLURBS: Record<Difficulty, string> = {
-  easy: "Fires blind. Clears a board in ~97 shots.",
-  medium: "Hunts on a checkerboard, then finishes what it starts. ~53 shots.",
-  hard: "Rebuilds a probability heat map every turn. ~44 shots.",
+  easy: "Fires blind, never following up a hit. Sinks your fleet in ~97 shots.",
+  medium:
+    "Hunts on a checkerboard, then finishes what it starts. Sinks your fleet in ~53 shots.",
+  hard: "Rebuilds a probability heat map every turn. Sinks your fleet in ~44 shots.",
 };
 
 /** Highest-scoring cell, breaking ties at random so the AI is not predictable. */
