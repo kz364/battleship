@@ -14,6 +14,7 @@
   min-height: 100vh;
   padding: clamp(1rem, 3vw, 2.5rem);
   font-family: var(--font-body);
+  line-height: 1.2;
   color: var(--ink);
   background: var(--backdrop);
   position: relative;
@@ -199,6 +200,7 @@
 .button {
   font-family: var(--font-body);
   font-size: 0.85rem;
+  line-height: 1.2;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink);
@@ -356,6 +358,8 @@
 .hint {
   margin: 0;
   font-size: 0.8rem;
+  line-height: 1.2;
+  min-height: 2.4em;
   color: var(--ink-dim);
 }
 
@@ -652,10 +656,9 @@ kbd {
   pointer-events: none;
 }
 
-/* Width is set per ship, in cells, so a hull always spans its own squares. Height is
-   left to the art's own proportions: forcing it to one cell squashed the short hulls,
-   worst on the two-cell Destroyer. A five-cell hull is now slightly taller than its
-   row, which is why nothing here clips. */
+/* Width is set per ship, in cells, so a hull always spans its own squares. Height follows
+   the art's own proportions: forcing it to one cell squashed the short hulls, worst on
+   the two-cell Destroyer. The Carrier is capped at one cell so nothing clips. */
 .ship img {
   position: absolute;
   left: 50%;
@@ -759,6 +762,7 @@ kbd {
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 0.82rem;
+  line-height: 1.2;
   text-align: left;
 }
 

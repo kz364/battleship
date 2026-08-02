@@ -40,7 +40,14 @@ test.describe("themes", () => {
   test("keeps the layout still when the skin changes", async ({ page }) => {
     const geometry = () =>
       page.evaluate(() =>
-        [".app__boards", ".board", ".board__grid", ".panel", ".panel--log"].map(
+        [
+          ".app__boards",
+          ".board",
+          ".board__grid",
+          ".app__boards > .panel:first-child",
+          ".app__boards > .panel:nth-child(2)",
+          ".panel--log",
+        ].map(
           (selector) => {
             const box = document
               .querySelector(selector)!
