@@ -35,7 +35,7 @@ part.
 | [20](#20-the-board-offered-to-place-a-ship-where-it-would-actually-pick-one-up) | Hovering your own hull drew a red "can't place here" ghost                  | Adding the hover highlight                                                        | The ghost read only the hovered coordinate; the click handler picks up the occupant first, so the two disagreed                                                      | The ghost defers to the click and renders nothing over an occupied square                                                     |
 | [21](#21-short-ships-were-squashed-to-fit-their-squares)                        | The two- and three-cell hulls read as blobs                                 | Screenshot from play, then measuring sprites against their source art             | Hulls were drawn one cell tall and _n_ cells long, forcing an aspect of `length : 1` on art that is the same shape whatever the ship                                 | Height follows the art's own proportions, capped at one cell; a unit test reads the PNG headers so the constants cannot drift |
 | [22](#22-picking-up-a-ship-stood-it-on-end)                                     | Lifting a randomized hull rotated it upright                                | Someone else playing it                                                           | Orientation is one shared piece of UI state, and pickup never read the placement's own                                                                               | Adopt the placement's orientation before removing it                                                                          |
-| [23](#23-switching-skins-moved-the-whole-layout)                                | Toggling Classic/Retro slid every element 48px sideways                     | Someone else playing it, then `getBoundingClientRect()` either side of the toggle | Panels were as wide as their text, and Retro is a monospace; its action buttons also wrapped onto a different number of lines                                        | Size panels from the board, not their text, and give the buttons a fixed two-by-two grid                                      |
+| [23](#23-switching-skins-moved-the-whole-layout)                                | Toggling Classic/Retro shifted and resized the layout                        | Someone else playing it, then `getBoundingClientRect()` either side of the toggle | Panel widths, wrapping and default line boxes all depended on the two themes' different font metrics                                                                  | Size panels from the board, fix the action grid and reserve explicit line heights                                             |
 | [24](#24-grid-lines-printed-through-the-ship-you-were-pointing-at)              | Grid lines and peg sockets showed through a highlighted hull                | Someone else playing it                                                           | Cells sit above the hull layer so a peg is never buried ([#10](#10-click-a-placed-ship-to-pick-it-up-again-did-nothing)); in placement there are no pegs, only lines | Raise the hull layer while a ship is pointed at, and paint nothing on its squares                                             |
 
 **How things get caught here, roughly in order of how much they found:**
@@ -44,7 +44,7 @@ part.
 | ------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | Playing the game in a browser         | Manual play, ~40 turns per pass                                                                    | #6, #7                                               |
 | Someone else playing it               | A pair of eyes that hadn't seen it before                                                          | #9, #12, #13, #14, #15, #16, #19, #21, #22, #23, #24 |
-| `npm run test:e2e`                    | Playwright, 50 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11, #17, #18, and it missed #14                |
+| `npm run test:e2e`                    | Playwright, 52 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11, #17, #18, and it missed #14                |
 | `npm run sim`                         | 100k headless games per difficulty, measures shot counts                                           | #3                                                   |
 | `npm run fuzz`                        | Invariant checker over full games (see [#8](#8-what-the-fuzzer-did-not-find))                      | nothing — see #8                                     |
 | `npm test`                            | 48 unit tests, including AI strength and heat-map shape regressions                                | guarded #3's fix                                     |
@@ -1154,13 +1154,16 @@ against the broken code.
 comparing screenshots: same page, same viewport, `getBoundingClientRect()` before and after
 the toggle. The boards moved 48px horizontally.
 
-**Root cause.** Two font-metric leaks into layout. Retro is a monospace, so the same
-strings are about 26% wider:
+**Root cause.** Font metrics leaked into both dimensions. Retro is a monospace, so the
+same strings are about 26% wider and its default line boxes differ from the system face:
 
 - The placement panel was as wide as its widest line of text — 401px in Classic, 498px in
   Retro — and the boards were centred against that.
 - Its four action buttons were a wrapping flex row that fitted on one line in one skin and
   broke onto two in the other, changing the panel's _height_ as well.
+- The header and form controls used font-dependent `normal` line heights, shifting all
+  content below them on macOS even after the panel-width fix.
+- The placement hint occupied one line in Classic and two in Retro.
 
 **Fix.** Size the panels from the board rather than from their text, and give the buttons a
 fixed shape so wrapping cannot differ:
@@ -1178,11 +1181,22 @@ fixed shape so wrapping cannot differ:
   display: grid;
   grid-template-columns: repeat(2, 1fr);
 }
+.app,
+.button,
+.control__select,
+.roster__item {
+  line-height: 1.2;
+}
+.hint {
+  min-height: 2.4em;
+}
 ```
 
-The test asserts the two skins produce byte-identical geometry for the boards, panels and
-log, in both placement and battle, which is a stronger and far cheaper check than a visual
-diff.
+The first version of the test sampled only the first panel and passed in Linux CI, whose
+available fonts masked the remaining shift. A macOS run failed deterministically. The
+test now measures both panels and asserts the two skins produce byte-identical geometry
+for the boards, panels and log, in both placement and battle. That is a stronger and far
+cheaper check than a visual diff.
 
 ## 24. Grid lines printed through the ship you were pointing at
 
