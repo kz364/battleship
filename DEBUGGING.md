@@ -1,7 +1,7 @@
 # Debugging log
 
-Twenty-six defects found while building this game, kept as a running log rather than
-reconstructed afterwards. This page is the short version: how they were caught, the six
+Twenty-seven defects found while building this game, kept as a running log rather than
+reconstructed afterwards. This page is the short version: how they were caught, the seven
 that were most worth catching, and what is now guarding each one. Every entry, with the
 offending code inline, is in the [full appendix](docs/debugging-appendix.md).
 
@@ -11,6 +11,7 @@ offending code inline, is in the [full appendix](docs/debugging-appendix.md).
 | -------------------------------------------------- | -------------------------------------------------------- |
 | Someone else playing the deployed game             | 11 — by far the most productive                          |
 | `npm run test:e2e` (Playwright, computed styles)   | 4, including two nobody had noticed by eye               |
+| Measuring the browser at each requested viewport   | 1 — sideways scroll only some scrollbars produce         |
 | Reading the code and the diff back                 | 3 — the two state bugs below, plus dead CSS              |
 | Playing it myself in a browser                     | 2                                                        |
 | `npm run sim` / `npm test` / `npm run typecheck`   | 2, and they hold the AI's published numbers in place     |
@@ -24,7 +25,7 @@ geometry in both themes, not an anecdote about a session.
 
 [fuzz]: docs/debugging-appendix.md#8-what-the-fuzzer-did-not-find
 
-## Six representative bugs
+## Seven representative bugs
 
 **The AI secretly fired twice per turn.** Seeded games were not reproducible.
 `chooseShot()` was being called _inside_ a `setGame` updater, and React Strict Mode
@@ -75,6 +76,14 @@ said it was your move. Fixed by deleting the mirror. Both of these last two are 
 mistake — state that duplicates or outlives the thing it describes — and both were found
 by reading, not by running.
 ([#26](docs/debugging-appendix.md#26-your-move-while-it-was-the-enemys-move))
+
+**A 320px screen scrolled sideways, but only on some of them.** `--cell` was sized in
+`vw`, and `100vw` counts a classic scrollbar's 15px as usable width — so the board panel
+came out at 320.39px inside a 305px content box. On a phone, where scrollbars are
+overlays, the same layout is fine, which is also why the committed regression could not
+see it: Playwright's device emulation uses overlay scrollbars too. The width budget now
+subtracts the scrollbar, and the test runs at 305px as well as 320px.
+([#27](docs/debugging-appendix.md#27-a-320px-screen-scrolled-sideways-but-only-on-some-of-them))
 
 ## Three claims that were wrong before the code was
 

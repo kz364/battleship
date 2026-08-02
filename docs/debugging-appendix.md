@@ -39,6 +39,7 @@ part.
 | [24](#24-grid-lines-printed-through-the-ship-you-were-pointing-at)              | Grid lines and peg sockets showed through a highlighted hull                | Someone else playing it                                                           | Cells sit above the hull layer so a peg is never buried ([#10](#10-click-a-placed-ship-to-pick-it-up-again-did-nothing)); in placement there are no pegs, only lines | Raise the hull layer while a ship is pointed at, and paint nothing on its squares                                             |
 | [25](#25-a-refused-placement-outlived-the-attempt-that-caused-it)               | A rejected placement stayed on screen after Randomize, Clear or a new ship  | Code review of the placement state, reproduced on the deployed build              | The rejection was free-floating UI state whose only end condition was a 2.2s timer                                                                                   | Store what the attempt was about and derive whether it still applies                                                          |
 | [26](#26-your-move-while-it-was-the-enemys-move)                                | Status said "Your move." for one render while the AI held the turn          | Reading `useBattle`; reproduced with a `MutationObserver` over the status line    | Whose turn it is was stored twice — authoritative `game.turn`, mirrored a render later into `aiThinking`                                                             | Delete the mirror; derive the sentence from `game.turn`                                                                       |
+| [27](#27-a-320px-screen-scrolled-sideways-but-only-on-some-of-them)             | 8px of horizontal scroll at 320px in a desktop browser, but not on a phone  | Browser pass measuring `scrollWidth` against `clientWidth` at each viewport       | `--cell` was sized in `vw`, which counts a classic scrollbar's 15px as usable width; Playwright's phone emulation uses overlay scrollbars and could not see it       | Subtract the scrollbar from the square's width budget, and test at 305px as well as 320px                                     |
 
 **How things get caught here, roughly in order of how much they found:**
 
@@ -1337,6 +1338,47 @@ const turn = game?.turn === "ai" ? "Enemy is taking aim…" : "Your move.";
 clicking an enemy cell, then asserts over _every_ text the line rendered — not the one a
 later read happens to catch — that none said `Your move.`. Against the pre-fix code it
 catches `Your move.` in that list; a retrying assertion sees nothing wrong either way.
+
+## 27. A 320px screen scrolled sideways, but only on some of them
+
+**Symptom.** At a 320px viewport the page scrolled horizontally by 8px — on a desktop
+Chrome window dragged narrow, and not on a phone.
+
+**How it was found.** A browser pass measuring `scrollWidth` against `clientWidth`
+numerically at each requested viewport, then walking every node whose right edge exceeded
+the client width. One did: `section.panel` at **320.39px**, wider than the viewport itself.
+
+**Root cause.** Two scrollbar models, and a unit that does not know which one is in play.
+The panel is sized from the board (`--cell * 10` plus the row labels, its own padding and
+its border), and `--cell` was a `vw` expression. `100vw` is the viewport _including_ a
+classic scrollbar, so where the scrollbar takes 15px of layout width the panel is sized
+against 320 and given 305 to fit into. With overlay scrollbars — every phone, and
+Playwright's device emulation — there is no discrepancy and the same layout is fine.
+
+That is also why the committed regression could not see it. `e2e/responsive.spec.ts`
+checked 320px through Playwright's phone emulation, which uses overlay scrollbars, so the
+assertion was green against a layout that genuinely scrolled sideways in a desktop
+browser.
+
+**Fix.** Subtract everything the ten squares do not get, scrollbar included, and let the
+square shrink to a 24px floor rather than overflowing:
+
+```css
+@media (max-width: 640px) {
+  .app {
+    --cell: clamp(24px, calc((100vw - 76px) / 10), 34px);
+  }
+}
+```
+
+Page and panel padding tighten below 400px, which buys back most of what the narrower
+square costs. Measured after: 24.4px squares and zero overflow at 320, 31.7px at 393,
+and still nothing overflowing when the layout is given only 305px to work with.
+
+**Verification.** The test now runs the check at 320 _and_ at 305 — 320 as the browser
+reports it, 305 as the layout experiences it behind a classic scrollbar — and asserts
+`scrollWidth - clientWidth <= 0` at both. Emulating the platform you cannot reproduce is
+cheaper than owning it.
 
 ## Things deliberately not "fixed"
 

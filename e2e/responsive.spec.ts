@@ -51,14 +51,20 @@ test.describe("layout", () => {
     const phone = await ownCell(page, 0, 0).boundingBox();
     expect(phone!.width).toBeGreaterThan(28);
 
-    await page.setViewportSize({ width: 320, height: 640 });
-    const narrow = await ownCell(page, 0, 0).boundingBox();
-    expect(narrow!.width).toBeGreaterThanOrEqual(24);
-    const overflows = await page.evaluate(
-      () =>
-        document.documentElement.scrollWidth >
-        document.documentElement.clientWidth,
-    );
-    expect(overflows).toBe(false);
+    // 320 as the browser sees it, and 305 as the layout sees it on a platform whose
+    // scrollbar takes 15px of it. Playwright's phone emulation uses overlay scrollbars,
+    // so a plain 320px check passes over a layout that does scroll sideways in Chrome
+    // on a desktop dragged narrow.
+    for (const width of [320, 305]) {
+      await page.setViewportSize({ width, height: 640 });
+      const narrow = await ownCell(page, 0, 0).boundingBox();
+      expect(narrow!.width, `${width}px cell`).toBeGreaterThanOrEqual(24);
+      const overflow = await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      );
+      expect(overflow, `${width}px sideways overflow`).toBeLessThanOrEqual(0);
+    }
   });
 });

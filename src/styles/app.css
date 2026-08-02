@@ -21,11 +21,23 @@
 }
 
 /* The 3.4vw above is set by the two boards standing side by side. Once they stack, a
-   square can follow the viewport instead of sitting on the 26px floor a two-up layout
-   needs — 31px rather than 26px on a 393px phone, still inside 320px. */
+   square can follow the viewport instead of sitting on the floor a two-up layout needs
+   — 31px rather than 26px on a 393px phone. The 76px is everything the ten squares do
+   not get: the row labels, the panel's padding and border, the page padding, and room
+   for a classic scrollbar, which `vw` counts as viewport but the layout cannot use. */
 @media (max-width: 640px) {
   .app {
-    --cell: clamp(26px, 8vw, 34px);
+    --cell: clamp(24px, calc((100vw - 76px) / 10), 34px);
+  }
+}
+
+@media (max-width: 400px) {
+  .app {
+    padding: 0.5rem;
+  }
+
+  .panel {
+    padding: 0.5rem;
   }
 }
 
