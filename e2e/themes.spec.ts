@@ -34,6 +34,37 @@ test.describe("themes", () => {
     await expect(page.locator(".app")).toHaveAttribute("data-theme", "classic");
   });
 
+  // Regression: the retro skin is a monospace, so panels sized by their text came out
+  // wider — and its action buttons wrapped onto a different number of lines — which
+  // slid every element sideways and down as you switched skins.
+  test("keeps the layout still when the skin changes", async ({ page }) => {
+    const geometry = () =>
+      page.evaluate(() =>
+        [".app__boards", ".board", ".board__grid", ".panel", ".panel--log"].map(
+          (selector) => {
+            const box = document
+              .querySelector(selector)!
+              .getBoundingClientRect();
+            return [box.x, box.y, box.width, box.height].map((n) =>
+              n.toFixed(2),
+            );
+          },
+        ),
+      );
+
+    await open(page);
+    const placement = await geometry();
+    await page.getByRole("button", { name: "Retro mode" }).click();
+    await expect(page.locator(".app")).toHaveAttribute("data-theme", "retro");
+    expect(await geometry()).toEqual(placement);
+
+    await startBattle(page);
+    const battle = await geometry();
+    await page.getByRole("button", { name: "Classic mode" }).click();
+    await expect(page.locator(".app")).toHaveAttribute("data-theme", "classic");
+    expect(await geometry()).toEqual(battle);
+  });
+
   // Regression: `.app[data-theme='retro'] .ship img` out-specified `.ship--sunk img`, and
   // because `filter` is a single property the losing rule was dropped whole — sunk hulls
   // rendered identically to live ones. Same trap had eaten the ghost and invalid tints.

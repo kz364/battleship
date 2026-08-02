@@ -124,7 +124,9 @@ export function Board({
           }),
         )}
 
-        <div className="board__ships">
+        <div
+          className={`board__ships ${highlightShip ? "board__ships--raised" : ""}`.trim()}
+        >
           {visibleShips.map((placement) => (
             <Ship
               key={placement.shipId}

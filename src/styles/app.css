@@ -6,6 +6,10 @@
 .app {
   --cell: clamp(26px, 3.4vw, 42px);
   --gutter: 1.4rem;
+  /* Ten squares, the row-label column, the gap between them, and the grid's border.
+     Panels are sized from this rather than from their text, so the two themes' very
+     different font metrics cannot shift the layout when you switch between them. */
+  --board-width: calc(var(--cell) * 10 + 1.4rem + 2px + 2px);
 
   min-height: 100vh;
   padding: clamp(1rem, 3vw, 2.5rem);
@@ -293,16 +297,23 @@
   min-width: 0;
 }
 
+/* A fixed two-by-two rather than a wrapping row: the retro face is a monospace, so its
+   buttons are a different width, and a wrapping row broke onto a second line in one
+   theme but not the other — the panel changed height as you switched. */
 .panel__actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 0.5rem;
+  width: var(--board-width);
+  max-width: 100%;
 }
 
 .panel__placeholder {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
+  width: var(--board-width);
+  max-width: 100%;
 }
 
 .hint {
@@ -467,6 +478,13 @@ kbd {
   pointer-events: none;
 }
 
+/* Except while a hull is being pointed at: the squares' grid lines and empty peg sockets
+   would otherwise print straight through the ship you are about to pick up. Only ever set
+   during placement, when there are no shot markers to hide. */
+.board__ships--raised {
+  z-index: 4;
+}
+
 .cell {
   position: relative;
   z-index: 2;
@@ -513,13 +531,13 @@ kbd {
   outline-offset: -2px;
 }
 
-/* The squares a ship occupies, lit while the pointer is on the hull or its roster row. */
-.cell--highlighted {
-  background: var(--cell-hover);
-  box-shadow:
-    inset 0 0 0 1px var(--ink-dim),
-    inset 1px 0 0 var(--grid-line),
-    inset 0 -1px 0 var(--grid-line);
+/* The squares a ship occupies, while the pointer is on the hull or its roster row. Cells
+   sit above the hull layer so anything painted here — a tint, a border — shows through
+   the ship; the highlight is drawn on the hull itself instead, and these squares only
+   suppress the ordinary hover tint that would otherwise wash over it. */
+.cell--highlighted,
+.cell--highlighted:hover {
+  background: transparent;
 }
 
 /* Where a ship was refused. The hover ghost already says this to anyone holding a mouse;
@@ -597,10 +615,15 @@ kbd {
   pointer-events: none;
 }
 
+/* Width is set per ship, in cells, so a hull always spans its own squares. Height is
+   left to the art's own proportions: forcing it to one cell squashed the short hulls,
+   worst on the two-cell Destroyer. A five-cell hull is now slightly taller than its
+   row, which is why nothing here clips. */
 .ship img {
   position: absolute;
   left: 50%;
   top: 50%;
+  height: auto;
   transform-origin: center;
   filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55));
 }
@@ -650,6 +673,7 @@ kbd {
 
 .carried img {
   position: absolute;
+  height: auto;
   filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
 }
 
