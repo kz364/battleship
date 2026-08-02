@@ -999,7 +999,7 @@ ones to distrust.
   it is random and legal but sequentially biased. Genuine uniformity means rejection
   sampling over whole configurations, and the bias is invisible to the density AI, which
   reasons from shots rather than from a placement prior.
-- **No "Grand Admiral" built on Monte Carlo sampling.** Prompted by
+- **No "Grand Admiral" built on sampling or Bayesian belief search.** Prompted by
   [mitchelljy/battleships_ai](https://github.com/mitchelljy/battleships_ai), which picks
   its shot by sampling thousands of random ship placements and firing at the most-covered
   square. That is the same per-ship marginal `densityMap` already computes — by
@@ -1007,7 +1007,7 @@ ones to distrust.
   cannot be better, only noisier, and measuring it confirmed that: reimplemented in this
   engine (charitably — uniform over legal placements rather than their rejection loop) and
   run over 1,000 games against identical fleets, it came in at **+0.47 ± 0.79 shots**
-  versus Admiral, at 23 ms per move against 3.5 ms. A 60-game pilot had it 0.65 shots
+  versus Admiral, at 23 ms per game against 3.5 ms. A 60-game pilot had it 0.65 shots
   _ahead_, which is the reminder that a difference this small needs paired trials and a
   confidence interval rather than a leaderboard.
 
@@ -1025,6 +1025,25 @@ ones to distrust.
   samples per move over 1,500 games, and +0.85 ± 0.64 at 300 samples. Better information,
   no better result — by the time the joint constraints bite, the marginals already point
   at the same square. Admiral stays.
+
+  The same conclusion survived a much better reference:
+  [gabegrand/battleship](https://github.com/gabegrand/battleship), research code that does
+  full-board conditional sampling with weighted particle beliefs and expected information
+  gain. Two things settled it. First, reading what it actually does for a _move_:
+  `planner_captain.py` marginalises its sampled boards into a posterior and takes
+  `np.argmax` — fire at the most likely occupied tile, the same objective as Admiral. EIG
+  is never applied to shots there; it scores the natural-language _questions_ its captain
+  asks a spotter, a mechanic this game does not have. Reimplementing its move rule here
+  over 800 games came to **+0.02 ± 0.88 shots**, at 85 ms per game against 4 ms.
+
+  Second, trying EIG as a shot rule anyway, since that is the interesting question its
+  machinery raises. It is a disaster: **100 shots, every game** — it fires at the whole
+  board. Maximising `binary_entropy(p)` seeks the tile nearest a 50/50 coin flip, so it
+  systematically avoids the tile it is most confident about, which is precisely the one
+  that finishes a wounded ship. Information and damage are different objectives, and
+  Battleship scores only the second. Worth writing down, because "use the
+  information-theoretic thing" sounds strictly more sophisticated right up until it is
+  measured.
 
 - **The AI does not model human placement habits.** A stronger opponent could exploit
   the fact that humans place ships badly (edge-biased, avoiding contact) by weighting its
