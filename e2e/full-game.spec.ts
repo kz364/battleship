@@ -33,6 +33,17 @@ test.describe("a game to the end", () => {
     await expect(result).toContainText(/Victory|Defeat/);
     await expect(result).toContainText("shots fired");
 
+    // The log is no longer live, so the result alert is the sole announcement path for
+    // the game-ending shot. It must include that shot, not replace it with only the
+    // verdict, and the ordinary status region must stand down to avoid two live regions.
+    const finalShot = await logEntries(page).first().textContent();
+    expect(finalShot).toBeTruthy();
+    await expect(result).toContainText(finalShot!);
+    await expect(page.getByRole("status")).toHaveCount(0);
+    expect(
+      await page.locator('[aria-live], [role="status"], [role="alert"]').count(),
+    ).toBe(1);
+
     // Firing after the game is over must be a no-op, not another log entry.
     const settled = await logEntries(page).count();
     await enemyCell(page, 9, 9).click({ force: true });

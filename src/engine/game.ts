@@ -1,6 +1,5 @@
-import { cellsFor, createBoard, placementAt, randomFleet } from "./board";
+import { cellsFor, createBoard, placementAt } from "./board";
 import {
-  FLEET,
   type Board,
   type Coord,
   type FireOutcome,
@@ -9,16 +8,9 @@ import {
   inBounds,
   specFor,
 } from "./types";
-import type { Rng } from "./rng";
 
 export function isSunk(board: Board, shipId: ShipId): boolean {
   return board.damage[shipId] >= specFor(shipId).length;
-}
-
-export function sunkShipIds(board: Board): ShipId[] {
-  return board.placements
-    .filter((p) => isSunk(board, p.shipId))
-    .map((p) => p.shipId);
 }
 
 export function isFleetDestroyed(board: Board): boolean {
@@ -26,10 +18,6 @@ export function isFleetDestroyed(board: Board): boolean {
     board.placements.length > 0 &&
     board.placements.every((p) => isSunk(board, p.shipId))
   );
-}
-
-export function alreadyFiredAt(board: Board, { row, col }: Coord): boolean {
-  return board.shots[row][col] !== null;
 }
 
 /**
@@ -110,13 +98,6 @@ export function createGame(
   };
 }
 
-export function newPlacementPhase(rng: Rng): {
-  playerFleet: Placement[];
-  aiFleet: Placement[];
-} {
-  return { playerFleet: randomFleet(rng), aiFleet: randomFleet(rng) };
-}
-
 /** Applies a shot by `side` at `coord` and hands the turn to the other side. */
 export function applyShot(
   state: GameState,
@@ -149,5 +130,3 @@ export function applyShot(
     winner: won ? side : null,
   };
 }
-
-export const FLEET_SPECS = FLEET;

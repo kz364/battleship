@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { FLEET } from "../engine/types";
 import { SPRITE_ASPECT, hullHeight } from "./sprites";
@@ -13,6 +13,19 @@ describe("sprite aspect ratios", () => {
   it.each(FLEET)("$id matches the art on disk", ({ id }) => {
     const { width, height } = pngSize(`public/ships/${id}.png`);
     expect(SPRITE_ASPECT[id]).toBeCloseTo(width / height, 4);
+  });
+
+  // A hull is never drawn wider than about 210 CSS px (five cells at the largest cell
+  // size), so art much past 2x that is pure download. The five originals were ~900px wide
+  // and 1.09 MB together, which was 94% of everything the page transferred.
+  it("ships art sized for the screen rather than for print", () => {
+    let total = 0;
+    for (const spec of FLEET) {
+      const path = `public/ships/${spec.id}.png`;
+      expect(pngSize(path).width).toBeLessThanOrEqual(512);
+      total += statSync(path).size;
+    }
+    expect(total).toBeLessThan(400_000);
   });
 
   it("never draws a hull thicker than one cell", () => {

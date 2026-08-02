@@ -89,6 +89,30 @@ export async function exchangeShot(
     .toBe(true);
 }
 
+/**
+ * The status line and any rejected-cell markers, sampled once with no polling.
+ * `expect(locator).toContainText()` retries, so it cannot see a wrong state that clears
+ * itself — and both bugs this guards are exactly that: a placement warning that lingers
+ * 2.2s past the attempt it described, and a single frame of "Your move." after firing.
+ */
+export function readStatus(page: Page): Promise<{
+  text: string;
+  warning: boolean;
+  rejected: number;
+}> {
+  return page.evaluate(() => {
+    const line = document.querySelector(".app__status");
+    return {
+      text: line?.textContent ?? "",
+      warning: line?.className.includes("app__status--warning") ?? false,
+      rejected: document.querySelectorAll(".cell--rejected").length,
+    };
+  });
+}
+
+export const rotateButton = (page: Page) =>
+  page.getByRole("button", { name: /^Rotate \(R\)/ });
+
 export function computedStyle(
   cell: Locator,
   property: string,

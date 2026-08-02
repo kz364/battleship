@@ -20,8 +20,8 @@ function emptyMap(): DensityMap {
 /**
  * Scores every un-fired cell by how many legal placements of the remaining ships would
  * cover it, weighting placements that also explain known hits. Firing at the maximum is
- * the probability-density strategy: near-optimal play, measured here at a median of 44
- * shots per game over 100k games.
+ * the probability-density strategy, measured here at a median of 44 shots per game over
+ * 100k games.
  *
  * On an empty board this is a centre-weighted bowl (corners 10, centre 34), not a
  * checkerboard — parity emerges only as misses accumulate and thin out the candidates

@@ -1,8 +1,9 @@
 name: CI
 
+# Pull requests only. Pushes to main are covered by deploy.yml, which calls the same
+# shared workflow as its first job — so the merge commit that actually ships still passes
+# every gate, without running the whole suite twice for one push.
 on:
-  push:
-    branches: [main]
   pull_request:
 
 jobs:

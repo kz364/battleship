@@ -125,20 +125,20 @@ test.describe("battle", () => {
     expect(own[1]).toContain("A1");
   });
 
-  // The status line only ever says "Your move." during battle, so the log is the sole
-  // record of what a shot did. Browser testing found it was not a live region at all,
-  // which left the game unplayable by ear. Announcing it correctly also depends on
-  // React inserting one row rather than rewriting every row's text, which reversing
-  // the list would do if the entries were keyed by their position on screen.
-  test("announces new entries without re-reading the old ones", async ({
-    page,
-  }) => {
+  // Every shot is announced once, by the status line. The log used to be a live region
+  // too, which meant the same sentence twice; it is now the written record only.
+  test("announces each shot exactly once", async ({ page }) => {
     await open(page);
     await startBattle(page, "Admiral");
     await exchangeShot(page, 0, 0);
 
     const list = page.locator("aside ol.log__list");
-    await expect(list).toHaveAttribute("aria-live", "polite");
+    await expect(list).not.toHaveAttribute("aria-live", /.*/);
+    expect(
+      await page.locator('[aria-live], [role="status"]').count(),
+      "exactly one live region",
+    ).toBe(1);
+    await expect(status(page)).toContainText("Enemy fired at");
 
     const before = await logEntries(page).evaluateAll((items) =>
       items.map((li, i) => {
@@ -261,5 +261,60 @@ test.describe("battle", () => {
 
     await expect(logEntries(page).first()).toContainText("Enemy fired at");
     await expect(status(page)).toContainText("Your move.");
+  });
+
+  // Regression: whose turn it was got mirrored into a separate `aiThinking` flag, set by
+  // an effect one render *after* the turn changed. In between, the board was locked and
+  // the log already showed the player's shot while the status still read "Your move."
+  //
+  // Sampling cannot catch a single commit reliably, and a retrying matcher never can, so
+  // every value the status takes is recorded as it is written and the whole sequence is
+  // checked. On the old code the run reads ["Your move.", "Enemy is taking aim…"].
+  test("never says it is your move while the enemy is aiming", async ({
+    page,
+  }) => {
+    await open(page);
+    await startBattle(page, "Admiral");
+
+    await page.evaluate(() => {
+      const line = document.querySelector(".app__status");
+      if (!line) throw new Error("no status line");
+      const seen: string[] = [];
+      (window as unknown as { seen: string[] }).seen = seen;
+      new MutationObserver(() => seen.push(line.textContent ?? "")).observe(
+        line,
+        { childList: true, characterData: true, subtree: true },
+      );
+    });
+
+    await enemyCell(page, 3, 3).click();
+    const seen = await page.evaluate(
+      () => (window as unknown as { seen: string[] }).seen,
+    );
+
+    expect(seen.length, "the status must react to the shot").toBeGreaterThan(0);
+    for (const text of seen) {
+      expect(
+        text,
+        `status rendered while the AI had the turn: ${text}`,
+      ).not.toContain("Your move.");
+    }
+    expect(seen[seen.length - 1]).toContain("You fired at D4");
+    expect(seen[seen.length - 1]).toContain("Enemy is taking aim");
+    await expect(enemyCell(page, 4, 4)).toBeDisabled();
+  });
+
+  // The log is below the fold on a laptop, so the running score sits with the boards.
+  test("keeps a running count of shots either way", async ({ page }) => {
+    await open(page);
+    await startBattle(page, "Admiral");
+    await expect(page.locator(".app__tally")).toContainText("You 0");
+
+    await exchangeShot(page, 0, 0);
+    await exchangeShot(page, 0, 1);
+
+    const tally = page.locator(".app__tally");
+    await expect(tally).toContainText("You 2");
+    await expect(tally).toContainText("Enemy 2");
   });
 });

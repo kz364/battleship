@@ -43,8 +43,6 @@ export interface Battle {
   startBattle: () => void;
 
   game: GameState | null;
-  /** True while the AI is deliberating, so the board can be locked. */
-  aiThinking: boolean;
   fireAtEnemy: (coord: Coord) => void;
   newGame: () => void;
 }
@@ -54,7 +52,6 @@ export function useBattle(): Battle {
   const [difficulty, setDifficulty] = useState<Difficulty>("hard");
   const [fleet, setFleet] = useState<Placement[]>(() => randomFleet(rng));
   const [game, setGame] = useState<GameState | null>(null);
-  const [aiThinking, setAiThinking] = useState(false);
 
   const phase: Phase =
     game === null ? "placement" : game.phase === "over" ? "over" : "playing";
@@ -86,7 +83,6 @@ export function useBattle(): Battle {
 
   const newGame = useCallback(() => {
     setGame(null);
-    setAiThinking(false);
     setFleet(randomFleet(rng));
   }, [rng]);
 
@@ -103,13 +99,14 @@ export function useBattle(): Battle {
   // chooseShot() draws from the shared RNG, so it has to run out here rather than inside
   // the setGame updater: React invokes updaters twice under Strict Mode, which would
   // advance the RNG twice per turn and make the AI's choices unreproducible.
+  //
+  // Whose turn it is lives in `game` alone. A mirrored `aiThinking` flag used to be set
+  // from this effect, which runs a render *after* the turn changes: for that one frame the
+  // board was locked and the log showed the player's shot while the status still read
+  // "Your move."
   useEffect(() => {
-    if (!game || game.phase !== "playing" || game.turn !== "ai") {
-      setAiThinking(false);
-      return;
-    }
+    if (!game || game.phase !== "playing" || game.turn !== "ai") return;
 
-    setAiThinking(true);
     const timer = setTimeout(() => {
       const coord = chooseShot(viewOf(game.player), difficulty, rng);
       setGame((current) => {
@@ -117,7 +114,6 @@ export function useBattle(): Battle {
           return current;
         return applyShot(current, "ai", coord);
       });
-      setAiThinking(false);
     }, AI_THINKING_MS);
 
     return () => clearTimeout(timer);
@@ -134,7 +130,6 @@ export function useBattle(): Battle {
     clearFleet,
     startBattle,
     game,
-    aiThinking,
     fireAtEnemy,
     newGame,
   };

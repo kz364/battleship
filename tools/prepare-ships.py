@@ -31,8 +31,10 @@ def key(name: str) -> None:
 
     bbox = img.getbbox()
     img = img.crop(bbox)
-    img.thumbnail((900, 900), Image.LANCZOS)
-    img.save(f"{OUT}/{name}.png")
+    # 450px covers a 2× desktop render of the widest hull (~210 CSS px) with room to
+    # spare; the source art is three times that, and paid for it in transfer size.
+    img.thumbnail((450, 450), Image.LANCZOS)
+    img.save(f"{OUT}/{name}.png", optimize=True)
     print(f"{name}: {img.size[0]}x{img.size[1]}")
 
 

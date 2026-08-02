@@ -20,6 +20,27 @@
   position: relative;
 }
 
+/* The 3.4vw above is set by the two boards standing side by side. Once they stack, a
+   square can follow the viewport instead of sitting on the floor a two-up layout needs
+   — 31px rather than 26px on a 393px phone. The 76px is everything the ten squares do
+   not get: the row labels, the panel's padding and border, the page padding, and room
+   for a classic scrollbar, which `vw` counts as viewport but the layout cannot use. */
+@media (max-width: 640px) {
+  .app {
+    --cell: clamp(24px, calc((100vw - 76px) / 10), 34px);
+  }
+}
+
+@media (max-width: 400px) {
+  .app {
+    padding: 0.5rem;
+  }
+
+  .panel {
+    padding: 0.5rem;
+  }
+}
+
 /* Classic: moulded navy plastic, the case you snap shut. */
 .app[data-theme="classic"] {
   --font-body: "Avenir Next", "Segoe UI", system-ui, sans-serif;
@@ -247,10 +268,38 @@
 
 .app__status {
   margin-top: 0.35rem;
-  margin-bottom: 1.2rem;
+  margin-bottom: 0;
   font-size: 1rem;
   letter-spacing: 0.05em;
   min-height: 1.5em;
+}
+
+.app__statusbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.2rem;
+}
+
+/* Shots fired either way, kept beside the status rather than only in the log, which on a
+   laptop sits below the fold. */
+.app__tally {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.1rem 0 0;
+  color: var(--ink-dim);
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.app__tally b {
+  color: var(--ink);
+}
+
+.button__state {
+  color: var(--ink-dim);
+  font-weight: 400;
 }
 
 /* ---------------------------------------------------------------- layout -- */
@@ -547,18 +596,17 @@ kbd {
 /* Where a ship was refused. The hover ghost already says this to anyone holding a mouse;
    this is the same information for touch and keyboard, which never get a hover state. */
 .cell--rejected {
-  animation: reject-flash 2.2s ease-out;
+  box-shadow: inset 0 0 0 2px var(--danger);
+  animation: reject-flash 0.9s ease-out;
 }
 
 @keyframes reject-flash {
   0%,
   60% {
     background: color-mix(in srgb, var(--danger) 55%, transparent);
-    box-shadow: inset 0 0 0 2px var(--danger);
   }
   100% {
     background: transparent;
-    box-shadow: inset 0 0 0 2px transparent;
   }
 }
 
@@ -567,10 +615,8 @@ kbd {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Hold the marker steady instead of fading it; it is cleared on a timer either way. */
   .cell--rejected {
     animation: none;
-    box-shadow: inset 0 0 0 2px var(--danger);
   }
 }
 
