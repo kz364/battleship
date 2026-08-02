@@ -58,6 +58,13 @@ export function Board({
   );
   const flashed = new Set(flashCells?.map((c) => `${c.row},${c.col}`));
 
+  // Squares a hull covers. The grid line and the moulded peg socket are painted by the
+  // cell, which sits above the hull layer so a peg is never buried — so without this the
+  // socket shows straight through every ship on the board.
+  const hulled = new Set(
+    visibleShips.flatMap((p) => cellsFor(p).map((c) => `${c.row},${c.col}`)),
+  );
+
   const highlighted = new Set(
     visibleShips
       .filter((p) => p.shipId === highlightShip)
@@ -100,6 +107,7 @@ export function Board({
               shot ? `cell--${shot}` : "",
               interactive && !shot ? "cell--targetable" : "",
               isLast ? "cell--latest" : "",
+              hulled.has(`${row},${col}`) ? "cell--hull" : "",
               isFlashed ? "cell--rejected" : "",
               highlighted.has(`${row},${col}`) ? "cell--highlighted" : "",
             ]

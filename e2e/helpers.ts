@@ -113,6 +113,9 @@ export function readStatus(page: Page): Promise<{
 export const rotateButton = (page: Page) =>
   page.getByRole("button", { name: /^Rotate \(R\)/ });
 
+/** The orientation of the ship in hand, as a player without a mouse can read it. */
+export const orientation = (page: Page) => page.locator(".hint__state");
+
 export function computedStyle(
   cell: Locator,
   property: string,

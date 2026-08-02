@@ -5,6 +5,7 @@ import {
   hulls,
   logEntries,
   open,
+  orientation,
   ownCell,
   readStatus,
   rotateButton,
@@ -67,11 +68,17 @@ test.describe("placement", () => {
   });
 
   test("rotates with the button and with R", async ({ page }) => {
-    // The button carries the current orientation: without it, a player with no mouse has
-    // nothing to read it from, since the only other sign is the hover ghost.
-    await expect(rotateButton(page)).toContainText("Horizontal");
+    // The orientation is written down: without it, a player with no mouse has nothing to
+    // read it from, since the only other sign is the hover ghost.
+    await expect(orientation(page)).toHaveText("horizontal");
+    await expect(rotateButton(page)).toHaveAccessibleName(
+      "Rotate (R), currently horizontal",
+    );
     await rotateButton(page).click();
-    await expect(rotateButton(page)).toContainText("Vertical");
+    await expect(orientation(page)).toHaveText("vertical");
+    await expect(rotateButton(page)).toHaveAccessibleName(
+      "Rotate (R), currently vertical",
+    );
     await ownCell(page, 0, 0).click();
     await expect(hulls(page)).toHaveCount(1);
     const vertical = await hulls(page)
@@ -84,9 +91,9 @@ test.describe("placement", () => {
 
     // Clear resets the rotation along with the fleet; one R press must still rotate it.
     await page.getByRole("button", { name: "Clear" }).click();
-    await expect(rotateButton(page)).toContainText("Horizontal");
+    await expect(orientation(page)).toHaveText("horizontal");
     await page.keyboard.press("r");
-    await expect(rotateButton(page)).toContainText("Vertical");
+    await expect(orientation(page)).toHaveText("vertical");
     await ownCell(page, 0, 0).click();
     const keyboardVertical = await hulls(page)
       .first()
@@ -95,6 +102,25 @@ test.describe("placement", () => {
           el.getBoundingClientRect().height > el.getBoundingClientRect().width,
       );
     expect(keyboardVertical).toBe(true);
+  });
+
+  // Regression: the orientation used to sit on the Rotate button, where the longer word
+  // re-wrapped it and moved everything below by a line on every press.
+  test("rotating does not move the layout", async ({ page }) => {
+    const boxes = async () =>
+      page.evaluate(() =>
+        [".panel__actions", ".board", ".panel--log", ".hint"].map((sel) => {
+          const { width, height } = document
+            .querySelector(sel)!
+            .getBoundingClientRect();
+          return { sel, width, height };
+        }),
+      );
+
+    const before = await boxes();
+    await rotateButton(page).click();
+    await expect(orientation(page)).toHaveText("vertical");
+    expect(await boxes()).toEqual(before);
   });
 
   // Regression: the pickup handler used to live on the sprite layer, which is
@@ -188,7 +214,7 @@ test.describe("placement", () => {
 
     await page.getByRole("button", { name: "Clear" }).click();
     await expect(hulls(page)).toHaveCount(0);
-    await expect(rotateButton(page)).toContainText("Horizontal");
+    await expect(orientation(page)).toHaveText("horizontal");
     await expect(page.locator(".carried")).toHaveAttribute(
       "data-ship",
       "carrier",
@@ -278,6 +304,26 @@ test.describe("placement", () => {
       "background-color",
       "rgba(0, 0, 0, 0)",
     );
+  });
+
+  // Regression: the same layering printed the classic peg sockets through every hull on
+  // the board, pointed at or not — a row of moulded holes down the middle of each ship.
+  test("paints no grid line or peg socket over a hull", async ({ page }) => {
+    await ownCell(page, 0, 0).click();
+    const covered = ownCell(page, 0, 2);
+    await expect(covered).toHaveClass(/cell--hull/);
+    expect(await computedStyle(covered, "box-shadow")).toBe("none");
+    expect(
+      await covered.evaluate((el) => getComputedStyle(el, "::before").content),
+    ).toBe("none");
+
+    // Open water keeps both, so this is suppression on the hull and not a theme that
+    // stopped drawing sockets altogether.
+    const water = ownCell(page, 5, 5);
+    expect(await computedStyle(water, "box-shadow")).not.toBe("none");
+    expect(
+      await water.evaluate((el) => getComputedStyle(el, "::before").content),
+    ).not.toBe("none");
   });
 
   // Regression: lifting a ship kept whatever the rotate toggle was set to, so a hull that
