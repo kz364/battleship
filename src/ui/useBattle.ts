@@ -14,9 +14,10 @@ import { viewOf } from "../ai/view";
 const AI_THINKING_MS = 650;
 
 /**
- * `?seed=123` makes a session reproducible: both fleets and every AI choice follow from
- * it. Handy for reporting a bug against an exact game, and it is what lets the end-to-end
- * tests assert on fixed board layouts.
+ * `?seed=123` makes a session reproducible. One stream feeds every draw in load order —
+ * the opening fleet, each Randomize, the enemy fleet at Engage, then each AI shot — so the
+ * same seed replays exactly as long as the same actions are taken. Handy for reporting a
+ * bug against an exact game, and it is what lets the end-to-end tests fix board layouts.
  */
 function seedFromUrl(): number | undefined {
   if (typeof window === "undefined") return undefined;

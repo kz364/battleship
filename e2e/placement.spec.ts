@@ -133,6 +133,66 @@ test.describe("placement", () => {
     await expect(hulls(page)).toHaveCount(2);
   });
 
+  // Hovering a hull has to say which ship it is, because clicking picks that one up.
+  test("picks out the ship under the pointer, from the board or the roster", async ({
+    page,
+  }) => {
+    await ownCell(page, 0, 0).click(); // Carrier, A1..E1
+    await ownCell(page, 0, 2).hover();
+
+    await expect(page.locator(".cell--highlighted")).toHaveCount(5);
+    await expect(page.locator(".ship--highlighted")).toHaveCount(1);
+    // Its own squares, not the neighbouring row's.
+    await expect(ownCell(page, 0, 4)).toHaveClass(/cell--highlighted/);
+    await expect(ownCell(page, 1, 0)).not.toHaveClass(/cell--highlighted/);
+    // The click would pick the Carrier up, so no ghost may promise a drop here.
+    await expect(page.locator(".ship--ghost")).toHaveCount(0);
+
+    await page.getByRole("heading", { name: "Battleship" }).hover();
+    await expect(page.locator(".cell--highlighted")).toHaveCount(0);
+
+    await page.getByRole("button", { name: /Carrier/ }).hover();
+    await expect(page.locator(".cell--highlighted")).toHaveCount(5);
+    await expect(page.locator(".ship--highlighted")).toHaveCount(1);
+  });
+
+  // Regression: taking a ship from the roster removed it from the board and drew nothing
+  // in its place, so the ship you were holding simply vanished until you dropped it.
+  test("carries the selected ship under the cursor", async ({
+    page,
+    isMobile,
+  }) => {
+    const carried = page.locator(".carried");
+    await expect(carried).toHaveAttribute("data-ship", "carrier");
+
+    // Touch has no hover, so the sprite would only ever sit under the finger: it stays
+    // hidden there, and the board's ghost does the work on tap.
+    await page.mouse.move(300, 40);
+    if (isMobile) {
+      await expect(carried).toHaveCSS("opacity", "0");
+    } else {
+      await expect(carried).toHaveCSS("opacity", "1");
+      const box = await carried.evaluate((el) => el.getBoundingClientRect());
+      expect(Math.abs(box.left - 300)).toBeLessThan(2);
+      expect(Math.abs(box.top - 40)).toBeLessThan(2);
+
+      // Over the grid the board's aligned ghost takes over, so the loose sprite hides.
+      await ownCell(page, 5, 5).hover();
+      await expect(carried).toHaveCSS("opacity", "0");
+      await expect(page.locator(".ship--ghost")).toHaveCount(1);
+    }
+
+    // Dropped: the Carrier is on the board, and the next ship comes to hand.
+    await ownCell(page, 5, 5).click();
+    await expect(hulls(page)).toHaveCount(1);
+    await expect(carried).toHaveAttribute("data-ship", "battleship");
+
+    // Taking it back from the roster must not leave an empty hand.
+    await page.getByRole("button", { name: /Carrier/ }).click();
+    await expect(hulls(page)).toHaveCount(0);
+    await expect(carried).toHaveAttribute("data-ship", "carrier");
+  });
+
   test("labels every cell for assistive tech", async ({ page }) => {
     await expect(ownCell(page, 0, 0)).toHaveAccessibleName("Your waters A1");
     await expect(ownCell(page, LAST, LAST)).toHaveAccessibleName(

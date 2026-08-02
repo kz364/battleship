@@ -20,6 +20,7 @@ import {
   type Difficulty,
 } from "./ai/strategies";
 import { Board } from "./ui/Board";
+import { CarriedShip } from "./ui/CarriedShip";
 import { Log } from "./ui/Log";
 import { Roster } from "./ui/Roster";
 import { Ship } from "./ui/Ship";
@@ -67,6 +68,7 @@ export default function App() {
   const [selected, setSelected] = useState<ShipId | null>(FLEET[0].id);
   const [orientation, setOrientation] = useState<Orientation>("horizontal");
   const [hover, setHover] = useState<Coord | null>(null);
+  const [highlighted, setHighlighted] = useState<ShipId | null>(null);
   const [rejection, setRejection] = useState<Rejection | null>(null);
 
   const placedIds = useMemo(
@@ -99,6 +101,8 @@ export default function App() {
 
   const ghost: Placement | null = useMemo(() => {
     if (battle.phase !== "placement" || !selected || !hover) return null;
+    // Over a hull the click picks that ship up, so promising a drop there would lie.
+    if (placementAt(battle.fleet, hover.row, hover.col)) return null;
     const spec = FLEET.find((s) => s.id === selected);
     if (!spec) return null;
     return {
@@ -108,7 +112,7 @@ export default function App() {
       col: hover.col,
       orientation,
     };
-  }, [battle.phase, selected, hover, orientation]);
+  }, [battle.phase, battle.fleet, selected, hover, orientation]);
 
   const ghostLegal = ghost
     ? isLegalPlacement(
@@ -169,7 +173,27 @@ export default function App() {
   const pickUp = (shipId: ShipId) => {
     battle.removeShip(shipId);
     setSelected(shipId);
+    setHighlighted(null);
   };
+
+  const enterCell = (coord: Coord) => {
+    setHover(coord);
+    setHighlighted(
+      placementAt(battle.fleet, coord.row, coord.col)?.shipId ?? null,
+    );
+  };
+
+  const leaveBoard = () => {
+    setHover(null);
+    setHighlighted(null);
+  };
+
+  // The ship in hand: selected, not yet on the board, so it can ride the cursor instead
+  // of disappearing between the roster and its square.
+  const carried =
+    battle.phase === "placement" && selected && !placedIds.has(selected)
+      ? FLEET.find((spec) => spec.id === selected)
+      : undefined;
 
   const game = battle.game;
   const lastEntry = game?.log[game.log.length - 1];
@@ -179,6 +203,14 @@ export default function App() {
   const lastAiShot = [...(game?.log ?? [])]
     .reverse()
     .find((e) => e.side === "ai");
+
+  // A hit jolts the board that took it, and reddens the screen edges when it is yours.
+  // The log length stands in for "which shot", so each new hit alternates the class and
+  // restarts the animation.
+  const struck =
+    game && lastEntry && lastEntry.result !== "miss" ? game.log.length : null;
+  const playerStruck = lastEntry?.side === "ai" ? struck : null;
+  const enemyStruck = lastEntry?.side === "player" ? struck : null;
 
   const statusText = (() => {
     if (battle.phase === "placement") {
@@ -199,6 +231,17 @@ export default function App() {
   return (
     <div className="app" data-theme={theme}>
       <div className="app__scanlines" aria-hidden="true" />
+      {playerStruck !== null && (
+        // Keyed by the shot, so each hit mounts a fresh node and replays the fade.
+        <div key={playerStruck} className="app__damage" aria-hidden="true" />
+      )}
+      {carried && (
+        <CarriedShip
+          shipId={carried.id}
+          length={carried.length}
+          orientation={orientation}
+        />
+      )}
 
       <header className="app__header">
         <h1 className="app__title">Battleship</h1>
@@ -238,101 +281,120 @@ export default function App() {
       </p>
 
       <main className="app__main">
-        <section className="panel">
-          <Board
-            label="Your waters"
-            board={battle.phase === "placement" ? placementBoard : game!.player}
-            revealShips
-            interactive={battle.phase === "placement"}
-            onCellClick={handlePlacementClick}
-            onCellEnter={setHover}
-            onCellLeave={() => setHover(null)}
-            flashKey={rejection?.nonce}
-            flashCells={rejection?.cells}
-            lastShot={
-              lastAiShot ? { row: lastAiShot.row, col: lastAiShot.col } : null
-            }
-            overlay={
-              <>
-                {ghost && (
-                  <Ship placement={ghost} ghost invalid={!ghostLegal} />
-                )}
-              </>
-            }
-          />
-          {battle.phase === "placement" ? (
-            <div className="panel__actions">
-              <button type="button" className="button" onClick={rotate}>
-                Rotate (R)
-              </button>
-              <button
-                type="button"
-                className="button"
-                onClick={battle.randomizeFleet}
-              >
-                Randomize
-              </button>
-              <button
-                type="button"
-                className="button"
-                onClick={battle.clearFleet}
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                className="button button--primary"
-                disabled={unplaced.length > 0}
-                onClick={battle.startBattle}
-              >
-                Engage
-              </button>
-            </div>
-          ) : (
-            <Roster title="Your fleet" board={game!.player} />
-          )}
-        </section>
-
-        <section className="panel">
-          {battle.phase === "placement" ? (
-            <div className="panel__placeholder">
-              <Roster
-                title="Choose a ship, then click your grid"
-                placed={placedIds}
-                selected={selected}
-                onSelect={(shipId) =>
-                  placedIds.has(shipId) ? pickUp(shipId) : setSelected(shipId)
-                }
-              />
-              <p className="hint">
-                Press <kbd>R</kbd> to rotate. Click a placed ship to pick it up
-                again.
-              </p>
-            </div>
-          ) : (
-            <>
+        <div className="app__field">
+          <div className="app__boards">
+            <section className="panel">
               <Board
-                label="Enemy waters"
-                board={game!.ai}
-                revealShips={battle.phase === "over"}
-                interactive={
-                  battle.phase === "playing" && game!.turn === "player"
+                label="Your waters"
+                board={
+                  battle.phase === "placement" ? placementBoard : game!.player
                 }
-                onCellClick={battle.fireAtEnemy}
+                revealShips
+                interactive={battle.phase === "placement"}
+                onCellClick={handlePlacementClick}
+                onCellEnter={
+                  battle.phase === "placement" ? enterCell : undefined
+                }
+                onCellLeave={leaveBoard}
+                flashKey={rejection?.nonce}
+                flashCells={rejection?.cells}
+                highlightShip={
+                  battle.phase === "placement" ? highlighted : null
+                }
+                shakeKey={playerStruck}
                 lastShot={
-                  lastPlayerShot
-                    ? { row: lastPlayerShot.row, col: lastPlayerShot.col }
+                  lastAiShot
+                    ? { row: lastAiShot.row, col: lastAiShot.col }
                     : null
                 }
+                overlay={
+                  <>
+                    {ghost && (
+                      <Ship placement={ghost} ghost invalid={!ghostLegal} />
+                    )}
+                  </>
+                }
               />
-              <Roster title="Enemy fleet" board={game!.ai} concealDamage />
-            </>
-          )}
-        </section>
+              {battle.phase === "placement" ? (
+                <div className="panel__actions">
+                  <button type="button" className="button" onClick={rotate}>
+                    Rotate (R)
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={battle.randomizeFleet}
+                  >
+                    Randomize
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={battle.clearFleet}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--primary"
+                    disabled={unplaced.length > 0}
+                    onClick={battle.startBattle}
+                  >
+                    Engage
+                  </button>
+                </div>
+              ) : (
+                <Roster title="Your fleet" board={game!.player} />
+              )}
+            </section>
 
-        <aside className="panel panel--side">
-          <Log entries={game?.log ?? []} />
-        </aside>
+            <section className="panel">
+              {battle.phase === "placement" ? (
+                <div className="panel__placeholder">
+                  <Roster
+                    title="Choose a ship, then click your grid"
+                    placed={placedIds}
+                    selected={selected}
+                    highlighted={highlighted}
+                    onHover={setHighlighted}
+                    onSelect={(shipId) =>
+                      placedIds.has(shipId)
+                        ? pickUp(shipId)
+                        : setSelected(shipId)
+                    }
+                  />
+                  <p className="hint">
+                    Press <kbd>R</kbd> to rotate. Click a placed ship to pick it
+                    up again.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <Board
+                    label="Enemy waters"
+                    board={game!.ai}
+                    revealShips={battle.phase === "over"}
+                    interactive={
+                      battle.phase === "playing" && game!.turn === "player"
+                    }
+                    onCellClick={battle.fireAtEnemy}
+                    shakeKey={enemyStruck}
+                    lastShot={
+                      lastPlayerShot
+                        ? { row: lastPlayerShot.row, col: lastPlayerShot.col }
+                        : null
+                    }
+                  />
+                  <Roster title="Enemy fleet" board={game!.ai} concealDamage />
+                </>
+              )}
+            </section>
+          </div>
+
+          <aside className="panel panel--log">
+            <Log entries={game?.log ?? []} />
+          </aside>
+        </div>
       </main>
 
       {battle.phase === "over" && (

@@ -177,6 +177,83 @@ test.describe("battle", () => {
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
   });
 
+  // Hit feedback is transient: the shake class and the red flash both clear on the next
+  // entry, so each shot is read once, immediately, rather than waited on.
+  test("jolts the board that takes a hit, and only on a hit", async ({
+    page,
+  }) => {
+    await open(page);
+    await startBattle(page, "Admiral");
+
+    const read = () =>
+      page.evaluate(() => {
+        const board = document.querySelector('[aria-label="Enemy waters"]');
+        return {
+          struck: /board--struck-(even|odd)/.test(board?.className ?? ""),
+          entry:
+            document.querySelector("aside ol li.log__entry")?.textContent ?? "",
+        };
+      });
+
+    let hits = 0;
+    let misses = 0;
+    // Sweep until both outcomes have been seen. 17 of the 100 squares hold a ship, so a
+    // skewed walk finds one quickly whatever the seeded layout turns out to be.
+    for (let shot = 0; shot < 30 && (hits === 0 || misses === 0); shot++) {
+      const cell = enemyCell(page, shot % 10, (shot * 3) % 10);
+      if (await cell.isDisabled()) continue;
+      await cell.click();
+
+      const { struck, entry } = await read();
+      if (!entry.startsWith("You fired")) continue; // AI already replied; unreadable
+      if (entry.includes("miss")) {
+        misses += 1;
+        expect(struck, `a miss must not shake: ${entry}`).toBe(false);
+      } else {
+        hits += 1;
+        expect(struck, `a hit must shake: ${entry}`).toBe(true);
+      }
+      await page.waitForTimeout(1_200); // let the AI answer before firing again
+    }
+    expect(hits, "30 shots should land at least one hit").toBeGreaterThan(0);
+    expect(misses).toBeGreaterThan(0);
+  });
+
+  test("reddens the screen edges when your own fleet is hit", async ({
+    page,
+  }) => {
+    await open(page);
+    await startBattle(page, "Admiral");
+
+    const flashed = () =>
+      page.evaluate(() => ({
+        flash: document.querySelectorAll(".app__damage").length,
+        entry:
+          document.querySelector("aside ol li.log__entry--ai")?.textContent ??
+          "",
+      }));
+
+    let hits = 0;
+    let misses = 0;
+    for (let col = 0; col < 10 && (hits === 0 || misses === 0); col++) {
+      await exchangeShot(page, 5, col);
+      const { flash, entry } = await flashed();
+      if (!entry.startsWith("Enemy fired")) continue;
+      if (entry.includes("miss")) {
+        misses += 1;
+        expect(flash, `no flash for an enemy miss: ${entry}`).toBe(0);
+      } else {
+        hits += 1;
+        expect(flash, `flash when your fleet is hit: ${entry}`).toBe(1);
+      }
+    }
+    expect(
+      hits,
+      "Admiral should land a hit within a dozen shots",
+    ).toBeGreaterThan(0);
+    expect(misses).toBeGreaterThan(0);
+  });
+
   test("announces enemy fire against your own fleet", async ({ page }) => {
     await open(page);
     await startBattle(page, "Admiral");
