@@ -525,24 +525,31 @@ kbd {
   overflow: hidden;
 }
 
-/* Ships sit under the pegs so a hit marker is never hidden by a hull. */
+/* Three layers, bottom to top: the squares, which paint the grid and the empty sockets;
+   the hulls, which cover the part of a square they actually sit on and no more; the pegs,
+   so a hit marker is never buried by the ship it hit. The squares stay interactive from
+   underneath because nothing above them takes the pointer. */
 .board__ships {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
 }
 
-/* Except while a hull is being pointed at: the squares' grid lines and empty peg sockets
-   would otherwise print straight through the ship you are about to pick up. Only ever set
-   during placement, when there are no shot markers to hide. */
-.board__ships--raised {
-  z-index: 4;
+.board__pegs {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: repeat(10, var(--cell));
+  grid-auto-rows: var(--cell);
+  place-items: center;
+  pointer-events: none;
 }
 
 .cell {
   position: relative;
-  z-index: 2;
+  z-index: 1;
   padding: 0;
   margin: 0;
   border: 0;
@@ -586,26 +593,12 @@ kbd {
   outline-offset: -2px;
 }
 
-/* The squares a ship occupies, while the pointer is on the hull or its roster row. Cells
-   sit above the hull layer so anything painted here — a tint, a border — shows through
-   the ship; the highlight is drawn on the hull itself instead, and these squares only
-   suppress the ordinary hover tint that would otherwise wash over it. */
+/* The squares a ship occupies, while the pointer is on the hull or its roster row. The
+   highlight is drawn on the hull itself; these squares only drop the ordinary hover tint,
+   which would otherwise ring the ship in whatever the hull does not cover. */
 .cell--highlighted,
 .cell--highlighted:hover {
   background: transparent;
-}
-
-/* A square with a hull on it paints nothing of its own. Cells sit above the ships so a
-   peg is never buried, which also meant the grid line and the classic peg socket printed
-   through every ship on the board. A peg still lands on top, because it is drawn by the
-   cell itself. Declared before `.cell--rejected`, which needs its border on a hull it
-   overlaps. */
-.cell--hull {
-  box-shadow: none;
-}
-
-.app[data-theme="classic"] .cell--hull::before {
-  content: none;
 }
 
 /* Where a ship was refused. The hover ghost already says this to anyone holding a mouse;
@@ -636,20 +629,18 @@ kbd {
 }
 
 .peg {
-  position: relative;
-  z-index: 3;
   width: 58%;
   height: 58%;
   border-radius: 50%;
   animation: peg-drop 0.18s ease-out;
 }
 
-.cell--hit .peg {
+.peg--hit {
   background: var(--peg-hit);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
-.cell--miss .peg {
+.peg--miss {
   background: var(--peg-miss);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   width: 40%;
