@@ -1,5 +1,5 @@
 import type { Placement } from "../engine/types";
-import { spriteUrl } from "./sprites";
+import { hullHeight, spriteUrl } from "./sprites";
 
 interface ShipProps {
   placement: Placement;
@@ -52,7 +52,7 @@ export function Ship({
         draggable={false}
         style={{
           width: `calc(var(--cell) * ${placement.length})`,
-          height: "var(--cell)",
+          height: hullHeight(placement.shipId, placement.length),
           transform: `translate(-50%, -50%) rotate(${vertical ? 90 : 0}deg)`,
         }}
       />

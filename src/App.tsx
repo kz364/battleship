@@ -171,6 +171,10 @@ export default function App() {
   };
 
   const pickUp = (shipId: ShipId) => {
+    // Adopt how the ship was lying, so lifting a randomized hull does not silently
+    // rotate it to whatever the toggle happened to be set to.
+    const lying = battle.fleet.find((p) => p.shipId === shipId);
+    if (lying) setOrientation(lying.orientation);
     battle.removeShip(shipId);
     setSelected(shipId);
     setHighlighted(null);

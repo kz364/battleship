@@ -1,5 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { cellName, hulls, logEntries, open, ownCell, status } from "./helpers";
+import {
+  cellName,
+  computedStyle,
+  hulls,
+  logEntries,
+  open,
+  ownCell,
+  status,
+} from "./helpers";
 
 const LAST = 9;
 
@@ -154,6 +162,64 @@ test.describe("placement", () => {
     await page.getByRole("button", { name: /Carrier/ }).hover();
     await expect(page.locator(".cell--highlighted")).toHaveCount(5);
     await expect(page.locator(".ship--highlighted")).toHaveCount(1);
+  });
+
+  // The squares are painted above the hulls so a peg is never buried by one, which meant
+  // grid lines and empty sockets printed through the ship you were pointing at.
+  test("draws a pointed-at hull over its squares, not under them", async ({
+    page,
+  }) => {
+    await ownCell(page, 0, 0).click();
+    const layer = page.locator(".board__ships").first();
+    await expect(layer).not.toHaveClass(/board__ships--raised/);
+
+    await ownCell(page, 0, 2).hover();
+    await expect(layer).toHaveClass(/board__ships--raised/);
+    const [shipLayer, square] = await Promise.all([
+      computedStyle(layer, "z-index"),
+      computedStyle(ownCell(page, 0, 2), "z-index"),
+    ]);
+    expect(Number(shipLayer)).toBeGreaterThan(Number(square));
+    // Nothing washes over the hull either: the hover tint is suppressed on its squares.
+    await expect(ownCell(page, 0, 2)).toHaveCSS(
+      "background-color",
+      "rgba(0, 0, 0, 0)",
+    );
+  });
+
+  // Regression: lifting a ship kept whatever the rotate toggle was set to, so a hull that
+  // had been lying across the board came back up on end.
+  test("keeps a lifted ship lying the way it was", async ({ page }) => {
+    const lying = (locator: ReturnType<typeof page.locator>) =>
+      locator.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        return box.width > box.height ? "horizontal" : "vertical";
+      });
+
+    // A fresh random fleet each pass, so the ships come up lying both ways rather than
+    // however one layout happened to fall — the bug only shows on the vertical ones.
+    const seen = new Set<string>();
+    const fleet = [
+      "Carrier",
+      "Battleship",
+      "Cruiser",
+      "Submarine",
+      "Destroyer",
+    ];
+
+    for (const ship of fleet) {
+      await page.getByRole("button", { name: "Randomize" }).click();
+      await expect(hulls(page)).toHaveCount(5);
+
+      const placed = await lying(
+        page.locator(`.ship:has(img[alt="${ship.toLowerCase()}"])`),
+      );
+      seen.add(placed);
+      await page.getByRole("button", { name: new RegExp(ship) }).click();
+      expect(await lying(page.locator(".carried img")), ship).toBe(placed);
+    }
+
+    expect([...seen].sort()).toEqual(["horizontal", "vertical"]);
   });
 
   // Regression: taking a ship from the roster removed it from the board and drew nothing

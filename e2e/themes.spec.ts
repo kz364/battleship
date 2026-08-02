@@ -34,6 +34,44 @@ test.describe("themes", () => {
     await expect(page.locator(".app")).toHaveAttribute("data-theme", "classic");
   });
 
+  // Regression: the retro skin is a monospace, so panels sized by their text came out
+  // wider — and its action buttons wrapped onto a different number of lines — which
+  // slid every element sideways and down as you switched skins.
+  test("keeps the layout still when the skin changes", async ({ page }) => {
+    const geometry = () =>
+      page.evaluate(() =>
+        [
+          ".app__boards",
+          ".board",
+          ".board__grid",
+          ".app__boards > .panel:first-child",
+          ".app__boards > .panel:nth-child(2)",
+          ".panel--log",
+        ].map(
+          (selector) => {
+            const box = document
+              .querySelector(selector)!
+              .getBoundingClientRect();
+            return [box.x, box.y, box.width, box.height].map((n) =>
+              n.toFixed(2),
+            );
+          },
+        ),
+      );
+
+    await open(page);
+    const placement = await geometry();
+    await page.getByRole("button", { name: "Retro mode" }).click();
+    await expect(page.locator(".app")).toHaveAttribute("data-theme", "retro");
+    expect(await geometry()).toEqual(placement);
+
+    await startBattle(page);
+    const battle = await geometry();
+    await page.getByRole("button", { name: "Classic mode" }).click();
+    await expect(page.locator(".app")).toHaveAttribute("data-theme", "classic");
+    expect(await geometry()).toEqual(battle);
+  });
+
   // Regression: `.app[data-theme='retro'] .ship img` out-specified `.ship--sunk img`, and
   // because `filter` is a single property the losing rule was dropped whole — sunk hulls
   // rendered identically to live ones. Same trap had eaten the ghost and invalid tints.
@@ -65,6 +103,29 @@ test.describe("themes", () => {
       await expect(page.locator(".ship--invalid")).toBeVisible();
       const invalid = await shipStyles(page, ".ship--invalid");
       expect(invalid.filter).not.toBe(live.filter);
+    });
+
+    // The highlight replaces the hull's whole filter, and retro's phosphor recolour lives
+    // in that same property — dropping it renders the pointed-at ship grey on a green console.
+    test(`keeps the ${theme} skin on a hull under the pointer`, async ({
+      page,
+    }) => {
+      await open(page);
+      if (theme === "retro") {
+        await page.getByRole("button", { name: "Retro mode" }).click();
+      }
+      await page.getByRole("button", { name: "Clear" }).click();
+      await ownCell(page, 0, 0).click();
+
+      const live = await shipStyles(page, ".ship:not(.ship--ghost)");
+      await ownCell(page, 0, 2).hover();
+      const lit = await shipStyles(page, ".ship--highlighted");
+
+      expect(lit.filter).not.toBe(live.filter);
+      expect(lit.opacity).toBe("1");
+      if (theme === "retro") {
+        expect(lit.filter).toContain("hue-rotate");
+      }
     });
 
     test(`dims sunk hulls in ${theme}`, async ({ page }) => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Orientation, ShipId } from "../engine/types";
-import { spriteUrl } from "./sprites";
+import { hullHeight, spriteUrl } from "./sprites";
 
 interface CarriedShipProps {
   shipId: ShipId;
@@ -64,7 +64,7 @@ export function CarriedShip({ shipId, length, orientation }: CarriedShipProps) {
         draggable={false}
         style={{
           width: `calc(var(--cell) * ${length})`,
-          height: "var(--cell)",
+          height: hullHeight(shipId, length),
           transform: `translate(-50%, -50%) rotate(${
             orientation === "vertical" ? 90 : 0
           }deg)`,
