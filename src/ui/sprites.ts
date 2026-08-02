@@ -14,11 +14,11 @@ export function spriteUrl(shipId: ShipId): string {
  * the PNG headers and fails if the art and these numbers ever disagree.
  */
 export const SPRITE_ASPECT: Record<ShipId, number> = {
-  carrier: 900 / 220,
-  battleship: 900 / 169,
-  cruiser: 893 / 152,
-  submarine: 889 / 179,
-  destroyer: 795 / 178,
+  carrier: 450 / 110,
+  battleship: 450 / 84,
+  cruiser: 450 / 77,
+  submarine: 450 / 91,
+  destroyer: 450 / 101,
 };
 
 /**

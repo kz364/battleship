@@ -19,6 +19,15 @@
   position: relative;
 }
 
+/* The 3.4vw above is set by the two boards standing side by side. Once they stack, a
+   square can follow the viewport instead of sitting on the 26px floor a two-up layout
+   needs — 31px rather than 26px on a 393px phone, still inside 320px. */
+@media (max-width: 640px) {
+  .app {
+    --cell: clamp(26px, 8vw, 34px);
+  }
+}
+
 /* Classic: moulded navy plastic, the case you snap shut. */
 .app[data-theme="classic"] {
   --font-body: "Avenir Next", "Segoe UI", system-ui, sans-serif;
@@ -245,10 +254,38 @@
 
 .app__status {
   margin-top: 0.35rem;
-  margin-bottom: 1.2rem;
+  margin-bottom: 0;
   font-size: 1rem;
   letter-spacing: 0.05em;
   min-height: 1.5em;
+}
+
+.app__statusbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.2rem;
+}
+
+/* Shots fired either way, kept beside the status rather than only in the log, which on a
+   laptop sits below the fold. */
+.app__tally {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.1rem 0 0;
+  color: var(--ink-dim);
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.app__tally b {
+  color: var(--ink);
+}
+
+.button__state {
+  color: var(--ink-dim);
+  font-weight: 400;
 }
 
 /* ---------------------------------------------------------------- layout -- */

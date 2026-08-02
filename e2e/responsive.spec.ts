@@ -39,4 +39,26 @@ test.describe("layout", () => {
     expect(box!.width).toBeGreaterThanOrEqual(24);
     expect(box!.height).toBeGreaterThanOrEqual(24);
   });
+
+  // The square grows with the viewport once the boards stack, so the two ends of that
+  // range are worth pinning: a phone should get more than the floor, and the narrowest
+  // screen anyone still ships must not scroll sideways.
+  test("grows the squares on a phone without overflowing a 320px screen", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 393, height: 851 });
+    await open(page);
+    const phone = await ownCell(page, 0, 0).boundingBox();
+    expect(phone!.width).toBeGreaterThan(28);
+
+    await page.setViewportSize({ width: 320, height: 640 });
+    const narrow = await ownCell(page, 0, 0).boundingBox();
+    expect(narrow!.width).toBeGreaterThanOrEqual(24);
+    const overflows = await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth >
+        document.documentElement.clientWidth,
+    );
+    expect(overflows).toBe(false);
+  });
 });

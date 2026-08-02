@@ -6,6 +6,8 @@ import {
   logEntries,
   open,
   ownCell,
+  readStatus,
+  rotateButton,
   status,
 } from "./helpers";
 
@@ -65,7 +67,11 @@ test.describe("placement", () => {
   });
 
   test("rotates with the button and with R", async ({ page }) => {
-    await page.getByRole("button", { name: "Rotate (R)" }).click();
+    // The button carries the current orientation: without it, a player with no mouse has
+    // nothing to read it from, since the only other sign is the hover ghost.
+    await expect(rotateButton(page)).toContainText("Horizontal");
+    await rotateButton(page).click();
+    await expect(rotateButton(page)).toContainText("Vertical");
     await ownCell(page, 0, 0).click();
     await expect(hulls(page)).toHaveCount(1);
     const vertical = await hulls(page)
@@ -76,7 +82,10 @@ test.describe("placement", () => {
       );
     expect(vertical).toBe(true);
 
+    // Clear resets the rotation along with the fleet, so R takes it back off horizontal.
     await page.getByRole("button", { name: "Clear" }).click();
+    await expect(rotateButton(page)).toContainText("Horizontal");
+    await page.keyboard.press("r");
     await page.keyboard.press("r");
     await ownCell(page, 0, 0).click();
     const horizontal = await hulls(page)
@@ -102,10 +111,79 @@ test.describe("placement", () => {
     await expect(status(page)).toContainText("5 ships to go");
     await expect(hulls(page)).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Rotate (R)" }).click();
+    await rotateButton(page).click();
     await ownCell(page, 0, 0).click();
     await ownCell(page, 2, 0).click();
     await expect(status(page)).toContainText("5 ships to go");
+  });
+
+  // Regression: a refusal was cleared only by its own 2.2s timer, so it outlived the
+  // attempt it described — Randomize could leave "Carrier won't fit at J10" printed in red
+  // over a complete, legal, ready-to-engage fleet.
+  test("drops a refused placement the moment the attempt changes", async ({
+    page,
+  }) => {
+    const refuse = async () => {
+      await ownCell(page, LAST, LAST).click();
+      await expect(status(page)).toHaveClass(/app__status--warning/);
+    };
+
+    // Sampled once, immediately: the warning clears itself after 2.2s, so a retrying
+    // matcher would wait out the very state under test and pass on the old code.
+    const clean = async (after: string) => {
+      const state = await readStatus(page);
+      expect(state.warning, `warning survived ${after}`).toBe(false);
+      expect(state.rejected, `rejected cells survived ${after}`).toBe(0);
+      expect(state.text).not.toContain("won't fit");
+      expect(state.text).not.toContain("can't go");
+    };
+
+    await refuse();
+    await rotateButton(page).click();
+    await clean("a rotation");
+
+    await refuse();
+    await page.getByRole("button", { name: /Battleship/ }).click();
+    await clean("taking a different ship");
+
+    await refuse();
+    await ownCell(page, 0, 0).click();
+    await clean("a placement that worked");
+
+    await refuse();
+    await page.getByRole("button", { name: "Randomize" }).click();
+    await clean("Randomize");
+    await expect(page.getByRole("button", { name: "Engage" })).toBeEnabled();
+
+    await page.getByRole("button", { name: "Clear" }).click();
+    await refuse();
+    await page.getByRole("button", { name: "Clear" }).click();
+    await clean("Clear");
+
+    await refuse();
+    await page.getByRole("button", { name: "New game" }).click();
+    await clean("New game");
+  });
+
+  // Clear builds a different fleet, so the ship in hand and its rotation have to follow it
+  // rather than describing the fleet that was just thrown away.
+  test("Clear puts the Carrier back in hand, lying flat", async ({ page }) => {
+    await rotateButton(page).click();
+    await ownCell(page, 0, 0).click();
+    await page.getByRole("button", { name: /Battleship/ }).click();
+    await expect(page.locator(".carried")).toHaveAttribute(
+      "data-ship",
+      "battleship",
+    );
+
+    await page.getByRole("button", { name: "Clear" }).click();
+    await expect(hulls(page)).toHaveCount(0);
+    await expect(rotateButton(page)).toContainText("Horizontal");
+    await expect(page.locator(".carried")).toHaveAttribute(
+      "data-ship",
+      "carrier",
+    );
+    await expect(page.locator(".cell--highlighted")).toHaveCount(0);
   });
 
   test("explains a placement that runs off the board", async ({ page }) => {
@@ -121,7 +199,7 @@ test.describe("placement", () => {
   });
 
   test("explains a placement blocked by another ship", async ({ page }) => {
-    await page.getByRole("button", { name: "Rotate (R)" }).click();
+    await rotateButton(page).click();
     // Carrier down A3..A7, then a Battleship from A1 that would run into its nose. The
     // origin itself is empty, so this is a rejected placement and not a pickup.
     await ownCell(page, 2, 0).click();

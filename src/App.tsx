@@ -24,6 +24,7 @@ import { CarriedShip } from "./ui/CarriedShip";
 import { Log } from "./ui/Log";
 import { Roster } from "./ui/Roster";
 import { Ship } from "./ui/Ship";
+import { describeShot } from "./ui/shotText";
 import { useBattle } from "./ui/useBattle";
 import { useTheme } from "./ui/useTheme";
 import "./styles/app.css";
@@ -38,6 +39,13 @@ interface Rejection {
   /** The cells the ship would have covered, highlighted so the reason is visible. */
   cells: Coord[];
   nonce: number;
+  /**
+   * What was being attempted. A refusal explains one specific attempt — this ship, this
+   * way up, against this fleet — so it stops being true the moment any of those change.
+   */
+  shipId: ShipId;
+  orientation: Orientation;
+  fleet: readonly Placement[];
 }
 
 function describeProblem(
@@ -134,6 +142,29 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [rejection]);
 
+  // Shown only while the attempt it describes is still the attempt on the table. Rotating,
+  // taking a different ship, Randomize, Clear, New game and a successful drop all change
+  // one of these, which retires the message without each of them having to remember to.
+  // `fleet` is compared by identity: every fleet edit produces a new array.
+  const liveRejection =
+    rejection &&
+    battle.phase === "placement" &&
+    rejection.shipId === selected &&
+    rejection.orientation === orientation &&
+    rejection.fleet === battle.fleet
+      ? rejection
+      : null;
+
+  // Clear and New game build a different fleet, so anything still pointing at the old one
+  // — the ship in hand, its rotation, what the pointer had picked out — has to let go.
+  const resetPlacementUi = (nextSelected: ShipId | null) => {
+    setSelected(nextSelected);
+    setOrientation("horizontal");
+    setHover(null);
+    setHighlighted(null);
+    setRejection(null);
+  };
+
   const handlePlacementClick = (coord: Coord) => {
     // Clicking a hull picks that ship back up. The hull sprites sit in a
     // pointer-events:none layer beneath the cell buttons, so the cell has to resolve
@@ -167,6 +198,9 @@ export default function App() {
       cells: cellsFor(placement),
       // Re-clicking the same bad cell should replay the flash rather than sit inert.
       nonce: Date.now(),
+      shipId: spec.id,
+      orientation,
+      fleet: battle.fleet,
     });
   };
 
@@ -201,6 +235,8 @@ export default function App() {
 
   const game = battle.game;
   const lastEntry = game?.log[game.log.length - 1];
+  const playerShots = game?.log.filter((e) => e.side === "player").length ?? 0;
+  const aiShots = game?.log.filter((e) => e.side === "ai").length ?? 0;
   const lastPlayerShot = [...(game?.log ?? [])]
     .reverse()
     .find((e) => e.side === "player");
@@ -216,9 +252,12 @@ export default function App() {
   const playerStruck = lastEntry?.side === "ai" ? struck : null;
   const enemyStruck = lastEntry?.side === "player" ? struck : null;
 
+  // The one place a shot is announced. It used to say only "Your move.", which left the
+  // log — three panels down and below the fold on a laptop — as the sole record of what
+  // had just happened, and the sole thing a screen reader could read.
   const statusText = (() => {
     if (battle.phase === "placement") {
-      if (rejection) return rejection.message;
+      if (liveRejection) return liveRejection.message;
       return unplaced.length > 0
         ? `Position your fleet — ${unplaced.length} ship${unplaced.length === 1 ? "" : "s"} to go.`
         : "Fleet ready. Engage when you are.";
@@ -228,8 +267,9 @@ export default function App() {
         ? "Enemy fleet destroyed. You win!"
         : "Your fleet is lost. Defeat.";
     }
-    if (battle.aiThinking) return "Enemy is taking aim…";
-    return lastEntry ? "Your move." : "Open fire when ready.";
+    if (!lastEntry) return "Open fire when ready.";
+    const turn = game?.turn === "ai" ? "Enemy is taking aim…" : "Your move.";
+    return `${describeShot(lastEntry)} ${turn}`;
   })();
 
   return (
@@ -270,19 +310,41 @@ export default function App() {
           <button type="button" className="button" onClick={toggleTheme}>
             {theme === "classic" ? "Retro mode" : "Classic mode"}
           </button>
-          <button type="button" className="button" onClick={battle.newGame}>
+          <button
+            type="button"
+            className="button"
+            onClick={() => {
+              battle.newGame();
+              resetPlacementUi(null);
+            }}
+          >
             New game
           </button>
         </div>
       </header>
 
       <p className="app__blurb">{DIFFICULTY_BLURBS[battle.difficulty]}</p>
-      <p
-        className={`app__status${rejection ? " app__status--warning" : ""}`}
-        role="status"
-      >
-        {statusText}
-      </p>
+      <div className="app__statusbar">
+        <p
+          className={`app__status${liveRejection ? " app__status--warning" : ""}`}
+          role="status"
+        >
+          {statusText}
+        </p>
+        {game && (
+          // The running score, up beside the boards rather than only in the log. Not a
+          // live region: the status line beside it already announces each shot.
+          <p className="app__tally">
+            <span>
+              You <b>{playerShots}</b>
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>
+              Enemy <b>{aiShots}</b>
+            </span>
+          </p>
+        )}
+      </div>
 
       <main className="app__main">
         <div className="app__field">
@@ -300,8 +362,8 @@ export default function App() {
                   battle.phase === "placement" ? enterCell : undefined
                 }
                 onCellLeave={leaveBoard}
-                flashKey={rejection?.nonce}
-                flashCells={rejection?.cells}
+                flashKey={liveRejection?.nonce}
+                flashCells={liveRejection?.cells}
                 highlightShip={
                   battle.phase === "placement" ? highlighted : null
                 }
@@ -321,20 +383,33 @@ export default function App() {
               />
               {battle.phase === "placement" ? (
                 <div className="panel__actions">
+                  {/*
+                    The orientation is on the button because the only other sign of it is
+                    the hover ghost, which touch and keyboard users never see.
+                  */}
                   <button type="button" className="button" onClick={rotate}>
-                    Rotate (R)
+                    Rotate (R) ·{" "}
+                    <span className="button__state">
+                      {orientation === "horizontal" ? "Horizontal" : "Vertical"}
+                    </span>
                   </button>
                   <button
                     type="button"
                     className="button"
-                    onClick={battle.randomizeFleet}
+                    onClick={() => {
+                      battle.randomizeFleet();
+                      resetPlacementUi(null);
+                    }}
                   >
                     Randomize
                   </button>
                   <button
                     type="button"
                     className="button"
-                    onClick={battle.clearFleet}
+                    onClick={() => {
+                      battle.clearFleet();
+                      resetPlacementUi(FLEET[0].id);
+                    }}
                   >
                     Clear
                   </button>
@@ -413,7 +488,10 @@ export default function App() {
           <button
             type="button"
             className="button button--primary"
-            onClick={battle.newGame}
+            onClick={() => {
+              battle.newGame();
+              resetPlacementUi(null);
+            }}
           >
             Play again
           </button>

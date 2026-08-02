@@ -1,12 +1,13 @@
 # Battleship
 
-Classic 10×10 Battleship against an AI that plays close to optimally, running entirely in
-the browser. No backend, no accounts, no network calls after the page loads.
+Classic 10×10 Battleship against a probability-density AI that clears a board in a median
+of 44 shots, running entirely in the browser. No backend, no accounts, no network calls after the page loads.
 
 **▶ Play: https://kz364.github.io/battleship/**
 
-**🐞 Debugging log: [DEBUGGING.md](DEBUGGING.md)** — every bug found while building this,
-how it was caught, and how it was fixed.
+**🐞 Debugging log: [DEBUGGING.md](DEBUGGING.md)** — how the bugs found while building
+this were caught and fixed, with every write-up in the
+[appendix](docs/debugging-appendix.md).
 
 ## The game
 
@@ -39,8 +40,10 @@ hit. Fire at the highest-scoring un-fired cell, breaking ties randomly.
 This single rule subsumes both classical modes without a mode flag: the moment something
 is wounded, the 10× weighting collapses the map onto the cells that would complete that
 ship (targeting), and the rest of the time it hunts. It is greedy — it maximises P(hit)
-this turn rather than minimising total turns — which is why it is near-optimal rather
-than optimal. Battleship is not a solved game.
+this turn rather than minimising total turns, so it is not claimed to be optimal —
+Battleship is not a solved game. It is measured: 44 shots against a theoretical floor of
+17, and two published alternatives were reimplemented and could not beat it (see the
+appendix).
 
 **What the map actually looks like while hunting.** On an empty board it is a smooth
 centre-weighted bowl, not a checkerboard — corners score 10 because few placements reach
@@ -121,9 +124,10 @@ Pushes to `main` build and publish to GitHub Pages via
 relative `base` so the bundle works from the `/battleship/` subpath without hardcoding
 the repo name.
 
-Deployment is gated on the checks passing. Both `ci.yml` and `deploy.yml` call the same
-reusable [`checks.yml`](.github/workflows/checks.yml) — lint, typecheck, unit tests, a
-500-game fuzz, the build and the Playwright suite — and the Pages job runs only once it
+Deployment is gated on the checks passing. [`ci.yml`](.github/workflows/ci.yml) runs on
+pull requests and `deploy.yml` runs on `main`; both call the same reusable
+[`checks.yml`](.github/workflows/checks.yml) — lint, typecheck, unit tests, a 500-game
+fuzz, the build and the Playwright suite — and the Pages job runs only once its own copy
 has gone green, so nothing can publish past a failing test.
 
 ## Licence

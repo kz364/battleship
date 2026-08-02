@@ -67,10 +67,6 @@ export function inBounds(row: number, col: number): boolean {
   return row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE;
 }
 
-export function coordKey(row: number, col: number): string {
-  return `${row},${col}`;
-}
-
 /** "A1" style label, columns are letters and rows are 1-indexed numbers. */
 export function coordLabel(row: number, col: number): string {
   return `${String.fromCharCode(65 + col)}${row + 1}`;
