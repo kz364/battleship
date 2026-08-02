@@ -59,28 +59,33 @@ test.describe("battle", () => {
     await startBattle(page, "Admiral");
     for (let col = 0; col < 4; col++) await exchangeShot(page, 2, col);
 
+    // Pegs are their own layer above the hulls rather than children of the squares, so
+    // match them to their square by position — which is also what a player sees.
     const geometry = await page
       .locator('button[aria-label*="("]')
-      .evaluateAll((cells) =>
-        cells.map((cell) => {
-          const pegs = cell.querySelectorAll(".peg");
-          const cellBox = cell.getBoundingClientRect();
-          const pegBox = pegs[0]?.getBoundingClientRect();
+      .evaluateAll((cells) => {
+        const centres = Array.from(document.querySelectorAll(".peg")).map(
+          (peg) => {
+            const box = peg.getBoundingClientRect();
+            return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+          },
+        );
+        return cells.map((cell) => {
+          const box = cell.getBoundingClientRect();
+          const cx = box.left + box.width / 2;
+          const cy = box.top + box.height / 2;
+          const inside = centres.filter(
+            (c) =>
+              Math.abs(c.x - cx) <= box.width / 2 &&
+              Math.abs(c.y - cy) <= box.height / 2,
+          );
           return {
-            pegs: pegs.length,
-            dx: pegBox
-              ? pegBox.left +
-                pegBox.width / 2 -
-                (cellBox.left + cellBox.width / 2)
-              : 99,
-            dy: pegBox
-              ? pegBox.top +
-                pegBox.height / 2 -
-                (cellBox.top + cellBox.height / 2)
-              : 99,
+            pegs: inside.length,
+            dx: inside[0] ? inside[0].x - cx : 99,
+            dy: inside[0] ? inside[0].y - cy : 99,
           };
-        }),
-      );
+        });
+      });
 
     expect(geometry.length).toBeGreaterThan(0);
     for (const cell of geometry) {

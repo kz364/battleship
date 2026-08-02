@@ -58,13 +58,6 @@ export function Board({
   );
   const flashed = new Set(flashCells?.map((c) => `${c.row},${c.col}`));
 
-  // Squares a hull covers. The grid line and the moulded peg socket are painted by the
-  // cell, which sits above the hull layer so a peg is never buried — so without this the
-  // socket shows straight through every ship on the board.
-  const hulled = new Set(
-    visibleShips.flatMap((p) => cellsFor(p).map((c) => `${c.row},${c.col}`)),
-  );
-
   const highlighted = new Set(
     visibleShips
       .filter((p) => p.shipId === highlightShip)
@@ -107,7 +100,6 @@ export function Board({
               shot ? `cell--${shot}` : "",
               interactive && !shot ? "cell--targetable" : "",
               isLast ? "cell--latest" : "",
-              hulled.has(`${row},${col}`) ? "cell--hull" : "",
               isFlashed ? "cell--rejected" : "",
               highlighted.has(`${row},${col}`) ? "cell--highlighted" : "",
             ]
@@ -125,16 +117,12 @@ export function Board({
                 aria-label={`${label} ${coordLabel(row, col)}${shot ? ` (${shot})` : ""}`}
                 onClick={() => onCellClick?.({ row, col })}
                 onPointerEnter={() => onCellEnter?.({ row, col })}
-              >
-                {shot && <span className="peg" />}
-              </button>
+              />
             );
           }),
         )}
 
-        <div
-          className={`board__ships ${highlightShip ? "board__ships--raised" : ""}`.trim()}
-        >
+        <div className="board__ships">
           {visibleShips.map((placement) => (
             <Ship
               key={placement.shipId}
@@ -144,6 +132,27 @@ export function Board({
             />
           ))}
           {overlay}
+        </div>
+
+        {/*
+          Pegs are a layer of their own, above the hulls, rather than children of the
+          squares. A hit marker must never be buried by the ship it hit, and the squares
+          have to stay *under* the hulls so their grid lines and peg sockets do not print
+          through one.
+        */}
+        <div className="board__pegs" aria-hidden="true">
+          {INDEXES.flatMap((row) =>
+            INDEXES.map((col) => {
+              const shot = board.shots[row][col];
+              return shot ? (
+                <span
+                  key={`${row}-${col}`}
+                  className={`peg peg--${shot}`}
+                  style={{ gridColumn: col + 1, gridRow: row + 1 }}
+                />
+              ) : null;
+            }),
+          )}
         </div>
       </div>
     </div>

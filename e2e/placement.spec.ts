@@ -283,47 +283,39 @@ test.describe("placement", () => {
     await expect(page.locator(".ship--highlighted")).toHaveCount(1);
   });
 
-  // The squares are painted above the hulls so a peg is never buried by one, which meant
-  // grid lines and empty sockets printed through the ship you were pointing at.
-  test("draws a pointed-at hull over its squares, not under them", async ({
-    page,
-  }) => {
-    await ownCell(page, 0, 0).click();
-    const layer = page.locator(".board__ships").first();
-    await expect(layer).not.toHaveClass(/board__ships--raised/);
-
-    await ownCell(page, 0, 2).hover();
-    await expect(layer).toHaveClass(/board__ships--raised/);
-    const [shipLayer, square] = await Promise.all([
-      computedStyle(layer, "z-index"),
-      computedStyle(ownCell(page, 0, 2), "z-index"),
-    ]);
-    expect(Number(shipLayer)).toBeGreaterThan(Number(square));
-    // Nothing washes over the hull either: the hover tint is suppressed on its squares.
-    await expect(ownCell(page, 0, 2)).toHaveCSS(
-      "background-color",
-      "rgba(0, 0, 0, 0)",
-    );
-  });
-
-  // Regression: the same layering printed the classic peg sockets through every hull on
-  // the board, pointed at or not — a row of moulded holes down the middle of each ship.
-  test("paints no grid line or peg socket over a hull", async ({ page }) => {
+  // Three layers, and the order between them is the whole reason none of the three
+  // symptoms below can come back: squares under hulls under pegs.
+  //
+  // Regression 1: hulls under squares printed grid lines and peg sockets through every
+  // ship. Regression 2: suppressing the square's own painting fixed that but erased the
+  // grid line across the *whole* square, including the part the hull does not cover.
+  test("stacks squares under hulls under pegs", async ({ page }) => {
     await ownCell(page, 0, 0).click();
     const covered = ownCell(page, 0, 2);
-    await expect(covered).toHaveClass(/cell--hull/);
-    expect(await computedStyle(covered, "box-shadow")).toBe("none");
-    expect(
-      await covered.evaluate((el) => getComputedStyle(el, "::before").content),
-    ).toBe("none");
 
-    // Open water keeps both, so this is suppression on the hull and not a theme that
-    // stopped drawing sockets altogether.
+    const [square, hull, pegs] = await Promise.all([
+      computedStyle(covered, "z-index"),
+      computedStyle(page.locator(".board__ships").first(), "z-index"),
+      computedStyle(page.locator(".board__pegs").first(), "z-index"),
+    ]);
+    expect(Number(square)).toBeLessThan(Number(hull));
+    expect(Number(hull)).toBeLessThan(Number(pegs));
+
+    // The covered square still paints its own grid line and socket, exactly as open water
+    // does. The hull hides them where it lies, and nowhere else.
     const water = ownCell(page, 5, 5);
-    expect(await computedStyle(water, "box-shadow")).not.toBe("none");
-    expect(
-      await water.evaluate((el) => getComputedStyle(el, "::before").content),
-    ).not.toBe("none");
+    const before = (locator: typeof covered) =>
+      locator.evaluate((el) => getComputedStyle(el, "::before").content);
+    expect(await computedStyle(covered, "box-shadow")).toBe(
+      await computedStyle(water, "box-shadow"),
+    );
+    expect(await computedStyle(covered, "box-shadow")).not.toBe("none");
+    expect(await before(covered)).toBe(await before(water));
+
+    // Nothing washes over the hull either: the hover tint is dropped on its squares.
+    await covered.hover();
+    await expect(page.locator(".ship--highlighted")).toHaveCount(1);
+    await expect(covered).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   });
 
   // Regression: lifting a ship kept whatever the rotate toggle was set to, so a hull that

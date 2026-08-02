@@ -44,20 +44,21 @@ part.
 | [29](#29-the-game-ending-shot-was-the-only-one-not-announced)                    | The final hit or sink was never spoken by the new single-announcement path  | Independent accessibility review, then an accelerated full browser game           | The game-over status branch replaced the shot sentence with only Victory/Defeat while the log was no longer live                                                                                | Put the final shot in the result alert and retire the ordinary status role at game over                                       |
 | [30](#30-peg-sockets-printed-through-every-hull-not-just-the-one-you-pointed-at) | A row of moulded peg holes down the middle of every Classic ship            | Someone else playing it                                                           | [#24](#24-grid-lines-printed-through-the-ship-you-were-pointing-at) raised the hull layer only while a ship was pointed at; the cell still painted its grid line and socket over the other four | Mark the squares a hull covers and let them draw nothing of their own, so pegs still land on top                              |
 | [31](#31-the-rotate-button-moved-the-page-every-time-you-pressed-it)             | Rotating a ship shifted the layout by a line                                | Someone else playing it                                                           | "Horizontal" and "Vertical" are different widths, so the label wrapped in one state and not the other — [#23](#23-switching-skins-moved-the-whole-layout) in a new disguise                     | Keep the word out of the button: constant label, orientation in the accessible name and the hint                              |
+| [32](#32-and-then-the-grid-lines-vanished-around-the-ships)                      | Grid lines vanished from every square a ship touched                        | Someone else playing it                                                           | #30 suppressed the whole square, but a hull is shorter than a cell is tall, so it erased lines the ship never covered                                                                           | Reorder instead of suppress: squares, then hulls, then a peg layer of their own                                               |
 
 **How things get caught here, roughly in order of how much they found:**
 
-| Tool                                  | What it is                                                                                         | What it caught                                       |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Playing the game in a browser         | Manual play, ~40 turns per pass                                                                    | #6, #7                                               |
-| Someone else playing it               | A pair of eyes that hadn't seen it before                                                          | #9, #12, #13, #14, #15, #16, #19, #21, #22, #23, #24, #30, #31 |
-| `npm run test:e2e`                    | Playwright, 64 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11, #17, #18, and it missed #14                |
-| `npm run sim`                         | 100k headless games per difficulty, measures shot counts                                           | #3                                                   |
-| `npm run fuzz`                        | Invariant checker over full games (see [#8](#8-what-the-fuzzer-did-not-find))                      | nothing — see #8                                     |
-| `npm test`                            | 49 unit tests, including AI strength, heat-map and ship-asset regressions                          | guarded #3 and the sprite-size contract              |
-| `npm run typecheck` / `npm run build` | tsc + Vite                                                                                         | #2                                                   |
-| Reading the diff back                 | —                                                                                                  | #5                                                   |
-| Reading the state back                | Looking for state that duplicates or outlives the thing it describes                               | #25, #26                                             |
+| Tool                                  | What it is                                                                                         | What it caught                                                      |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Playing the game in a browser         | Manual play, ~40 turns per pass                                                                    | #6, #7                                                              |
+| Someone else playing it               | A pair of eyes that hadn't seen it before                                                          | #9, #12, #13, #14, #15, #16, #19, #21, #22, #23, #24, #30, #31, #32 |
+| `npm run test:e2e`                    | Playwright, 62 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11, #17, #18, and it missed #14                               |
+| `npm run sim`                         | 100k headless games per difficulty, measures shot counts                                           | #3                                                                  |
+| `npm run fuzz`                        | Invariant checker over full games (see [#8](#8-what-the-fuzzer-did-not-find))                      | nothing — see #8                                                    |
+| `npm test`                            | 49 unit tests, including AI strength, heat-map and ship-asset regressions                          | guarded #3 and the sprite-size contract                             |
+| `npm run typecheck` / `npm run build` | tsc + Vite                                                                                         | #2                                                                  |
+| Reading the diff back                 | —                                                                                                  | #5                                                                  |
+| Reading the state back                | Looking for state that duplicates or outlives the thing it describes                               | #25, #26                                                            |
 
 Three of these (#5, #9, #11) are CSS, and none could have been caught by types, lint,
 unit tests or the build — which is why the browser pass that found them is now a
@@ -1464,6 +1465,9 @@ has `box-shadow: none` and no `::before` content, while an open-water square on 
 board still has both — otherwise a theme that quietly stopped drawing sockets at all
 would pass. Retro is unaffected; it never had sockets.
 
+**This fix was wrong**, and [#32](#32-and-then-the-grid-lines-vanished-around-the-ships)
+replaces it. A square is not the same shape as the hull sitting on it.
+
 ## 31. The Rotate button moved the page every time you pressed it
 
 **Symptom.** Rotating a ship nudged the layout: the panel under the button grew or shrank
@@ -1490,6 +1494,46 @@ the board, the log panel and the hint are unchanged to the pixel, which fails ag
 button-label version. Another reads the orientation from the hint and the accessible name
 in both states, so the accessibility requirement cannot be dropped in the name of
 layout stability.
+
+## 32. And then the grid lines vanished around the ships
+
+**Symptom.** In both themes, the grid lines disappeared from any square a ship touched —
+not just where the ship covered them. A hull left a clear channel around itself.
+
+**How it was found.** Someone else playing it, one deploy after
+[#30](#30-peg-sockets-printed-through-every-hull-not-just-the-one-you-pointed-at)
+introduced it.
+
+**Root cause.** #30 stopped the square painting its own furniture whenever a hull
+overlapped it. But a hull is not square: it is drawn at its art's own proportions and is
+shorter than a cell is tall ([#21](#21-short-ships-were-squashed-to-fit-their-squares)),
+so suppressing the whole square erases lines the ship was never covering. Suppression is
+the wrong tool for an occlusion problem — the fix has to depend on the hull's actual
+silhouette, which only the compositor knows.
+
+**Fix.** Stop fighting the stacking order and change it. The reason the squares were on
+top at all was that pegs are drawn by them
+([#10](#10-click-a-placed-ship-to-pick-it-up-again-did-nothing)), and a hit marker must
+never be buried by the ship it hit. So the pegs moved out into a layer of their own, and
+the board is now three plain layers:
+
+```
+.cell        z-index 1   grid lines, peg sockets, hover, targeting outline
+.board__ships z-index 2  hulls, ghosts, the carried ship
+.board__pegs  z-index 3  one span per fired square, placed by grid coordinates
+```
+
+Everything above the squares sets `pointer-events: none`, so the squares stay clickable
+from underneath. The hull now hides exactly the pixels it covers and no others, which is
+what was wanted in #24 and #30 both — and `.board__ships--raised`, the placement-only
+hack from #24, is deleted along with `.cell--hull`.
+
+**Verification.** One test asserts the whole order (`square < hull < pegs`) rather than a
+single pair, plus that a covered square's `box-shadow` and `::before` are _identical to an
+open-water square's_ — the exact property #30 broke, and it fails against #30's CSS. The
+peg-geometry test from [#9](#9-every-fired-cell-grew-a-second-dot) now matches pegs to
+squares by position instead of by DOM parentage, so it keeps proving one centred peg per
+fired square after the move.
 
 ## Things deliberately not "fixed"
 
