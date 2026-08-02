@@ -40,6 +40,8 @@ part.
 | [25](#25-a-refused-placement-outlived-the-attempt-that-caused-it)               | A rejected placement stayed on screen after Randomize, Clear or a new ship  | Code review of the placement state, reproduced on the deployed build              | The rejection was free-floating UI state whose only end condition was a 2.2s timer                                                                                   | Store what the attempt was about and derive whether it still applies                                                          |
 | [26](#26-your-move-while-it-was-the-enemys-move)                                | Status said "Your move." for one render while the AI held the turn          | Reading `useBattle`; reproduced with a `MutationObserver` over the status line    | Whose turn it is was stored twice — authoritative `game.turn`, mirrored a render later into `aiThinking`                                                             | Delete the mirror; derive the sentence from `game.turn`                                                                       |
 | [27](#27-a-320px-screen-scrolled-sideways-but-only-on-some-of-them)             | 8px of horizontal scroll at 320px in a desktop browser, but not on a phone  | Browser pass measuring `scrollWidth` against `clientWidth` at each viewport       | `--cell` was sized in `vw`, which counts a classic scrollbar's 15px as usable width; Playwright's phone emulation uses overlay scrollbars and could not see it       | Subtract the scrollbar from the square's width budget, and test at 305px as well as 320px                                     |
+| [28](#28-a-retired-placement-warning-could-come-back)                           | Returning to a ship or orientation resurrected an old rejection             | Independent review of #25, reproduced in the production browser                  | The derived predicate hid stale state but did not retire it; reversible controls could make the old predicate true again                                               | Clear the stored attempt when selection or orientation changes; test the round trip                                           |
+| [29](#29-the-game-ending-shot-was-the-only-one-not-announced)                   | The final hit or sink was never spoken by the new single-announcement path  | Independent accessibility review, then an accelerated full browser game           | The game-over status branch replaced the shot sentence with only Victory/Defeat while the log was no longer live                                                        | Put the final shot in the result alert and retire the ordinary status role at game over                                       |
 
 **How things get caught here, roughly in order of how much they found:**
 
@@ -50,7 +52,7 @@ part.
 | `npm run test:e2e`                    | Playwright, 60 checks over desktop and a phone viewport, asserting on computed styles and geometry | #10, #11, #17, #18, and it missed #14                |
 | `npm run sim`                         | 100k headless games per difficulty, measures shot counts                                           | #3                                                   |
 | `npm run fuzz`                        | Invariant checker over full games (see [#8](#8-what-the-fuzzer-did-not-find))                      | nothing — see #8                                     |
-| `npm test`                            | 48 unit tests, including AI strength and heat-map shape regressions                                | guarded #3's fix                                     |
+| `npm test`                            | 49 unit tests, including AI strength, heat-map and ship-asset regressions                           | guarded #3 and the sprite-size contract              |
 | `npm run typecheck` / `npm run build` | tsc + Vite                                                                                         | #2                                                   |
 | Reading the diff back                 | —                                                                                                  | #5                                                   |
 | Reading the state back                | Looking for state that duplicates or outlives the thing it describes                               | #25, #26                                             |
@@ -1282,12 +1284,12 @@ the attempt had been superseded, and arbitrary when it had not — a refusal tha
 true should stay readable, which matters most for the touch and keyboard users it exists
 for. The flash animation is now a flash (0.9s) over a marker that persists.
 
-One derived value replaces a list of handlers each remembering to call `setRejection(null)`
-— rotating, selecting, picking up, placing, randomizing, clearing, starting a battle and
-starting a new game all change one of those four things, so all of them clear it, and any
-future context change does too. `Clear` and `New game` additionally reset the held ship,
-orientation and hover through one `resetPlacementUi` helper, so the panel cannot contradict
-the fleet it just created.
+Fleet changes make the derived predicate false by identity. Selection and orientation are
+reversible, however, so those controls also retire the stored attempt; otherwise returning
+to Carrier or rotating twice can make the old predicate true again (see
+[#28](#28-a-retired-placement-warning-could-come-back)). `Clear` and `New game`
+additionally reset the held ship, orientation and hover through one `resetPlacementUi`
+helper, so the panel cannot contradict the fleet it just created.
 
 **Verification.** A Playwright regression walks each transition, and after every one reads
 the status text, its warning class and the rejected-cell count **once**, with
@@ -1379,6 +1381,47 @@ and still nothing overflowing when the layout is given only 305px to work with.
 reports it, 305 as the layout experiences it behind a classic scrollbar — and asserts
 `scrollWidth - clientWidth <= 0` at both. Emulating the platform you cannot reproduce is
 cheaper than owning it.
+
+## 28. A retired placement warning could come back
+
+**Symptom.** Reject Carrier at J10, select Battleship, then select Carrier again. The old
+Carrier warning and rejected square came back without another placement attempt. Rotating
+away and back did the same thing.
+
+**How it was found.** Independent review of the proposed #25 fix, then reproduced against
+the exact PR build in a browser. The committed test checked only the outward transition,
+so all its assertions passed.
+
+**Root cause.** `liveRejection` was a reversible predicate over stored state. Selecting a
+different ship made it false but left `rejection` intact; returning to the original ship
+made the same old object live again. "Not currently displayed" is not the same as
+"retired."
+
+**Fix and verification.** The selection and rotation entry points clear the stored attempt
+as well as changing their own state. The regression now walks both round trips—Carrier →
+Battleship → Carrier and horizontal → vertical → horizontal—and reads the status and
+rejected cells once after each transition. The keyboard-rotation test also now presses R
+once and requires a vertical hull; its accidental double press previously returned to
+horizontal and would pass even if the shortcut did nothing.
+
+## 29. The game-ending shot was the only one not announced
+
+**Symptom.** The PR moved shot announcements from the log to the status line to avoid
+speaking every shot twice. On the final turn, neither live region spoke the shot: the log
+was no longer live, and the status said only `Your fleet is lost. Defeat.` or its victory
+equivalent. In an accelerated full browser game the newest written log row was
+`Enemy fired at J10 — your Destroyer is sunk!`, while the two live regions contained only
+the generic defeat status and result alert.
+
+**Root cause.** The status renderer handled `phase === "over"` before it called
+`describeShot(lastEntry)`, replacing the only announcement path precisely when the final
+shot changed the phase.
+
+**Fix and verification.** At game over, the ordinary status paragraph remains visible but
+gives up its live `status` role. The result alert includes `describeShot(lastEntry)` before
+the verdict and tally, leaving exactly one live region containing the final shot. The
+complete-game E2E test asserts that the alert contains the newest log sentence and that
+only one live region remains.
 
 ## Things deliberately not "fixed"
 

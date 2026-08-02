@@ -82,11 +82,20 @@ export default function App() {
   );
   const unplaced = FLEET.filter((spec) => !placedIds.has(spec.id));
 
-  const rotate = useCallback(
-    () =>
-      setOrientation((o) => (o === "horizontal" ? "vertical" : "horizontal")),
-    [],
-  );
+  const rotate = useCallback(() => {
+    setOrientation((o) => (o === "horizontal" ? "vertical" : "horizontal"));
+    // A reversible context change must retire the old attempt, not merely hide it. If
+    // the player rotates twice, the old orientation is current again but the rejected
+    // drop is not a new attempt and must not reappear.
+    setRejection(null);
+  }, []);
+
+  const selectShip = useCallback((shipId: ShipId) => {
+    setSelected(shipId);
+    // Returning to a previously selected ship must not resurrect its old warning after
+    // another ship has been held in between.
+    setRejection(null);
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -135,8 +144,9 @@ export default function App() {
   // hover. Touch and keyboard users get the same information from this instead, and it
   // stays legible for as long as the attempt it describes is still on the table rather
   // than expiring on a clock.
-  // Rotating, taking a different ship, Randomize, Clear, New game and a successful drop
-  // all change one of these, which retires the message without each having to remember to.
+  // Fleet edits retire the message by identity. The two reversible controls — rotation
+  // and ship selection — also clear the stored attempt so returning to an old value
+  // cannot resurrect a warning that has already been superseded.
   // `fleet` is compared by identity: every fleet edit produces a new array.
   const liveRejection =
     rejection &&
@@ -202,7 +212,7 @@ export default function App() {
     const lying = battle.fleet.find((p) => p.shipId === shipId);
     if (lying) setOrientation(lying.orientation);
     battle.removeShip(shipId);
-    setSelected(shipId);
+    selectShip(shipId);
     setHighlighted(null);
   };
 
@@ -319,7 +329,7 @@ export default function App() {
       <div className="app__statusbar">
         <p
           className={`app__status${liveRejection ? " app__status--warning" : ""}`}
-          role="status"
+          role={battle.phase === "over" ? undefined : "status"}
         >
           {statusText}
         </p>
@@ -429,9 +439,7 @@ export default function App() {
                     highlighted={highlighted}
                     onHover={setHighlighted}
                     onSelect={(shipId) =>
-                      placedIds.has(shipId)
-                        ? pickUp(shipId)
-                        : setSelected(shipId)
+                      placedIds.has(shipId) ? pickUp(shipId) : selectShip(shipId)
                     }
                   />
                   <p className="hint">
@@ -473,6 +481,12 @@ export default function App() {
           <p className="result__text">
             {game?.winner === "player" ? "Victory" : "Defeat"}
           </p>
+          {lastEntry && (
+            // The log is intentionally not live, so the result alert must carry the
+            // game-ending shot as well as the verdict. Otherwise the final sink is the
+            // one shot a screen reader never hears.
+            <p className="result__detail">{describeShot(lastEntry)}</p>
+          )}
           <p className="result__detail">
             {game?.log.filter((e) => e.side === "player").length} shots fired ·{" "}
             {game?.log.filter((e) => e.side === "ai").length} taken

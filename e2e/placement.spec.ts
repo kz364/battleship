@@ -82,19 +82,19 @@ test.describe("placement", () => {
       );
     expect(vertical).toBe(true);
 
-    // Clear resets the rotation along with the fleet, so R takes it back off horizontal.
+    // Clear resets the rotation along with the fleet; one R press must still rotate it.
     await page.getByRole("button", { name: "Clear" }).click();
     await expect(rotateButton(page)).toContainText("Horizontal");
     await page.keyboard.press("r");
-    await page.keyboard.press("r");
+    await expect(rotateButton(page)).toContainText("Vertical");
     await ownCell(page, 0, 0).click();
-    const horizontal = await hulls(page)
+    const keyboardVertical = await hulls(page)
       .first()
       .evaluate(
         (el) =>
-          el.getBoundingClientRect().width > el.getBoundingClientRect().height,
+          el.getBoundingClientRect().height > el.getBoundingClientRect().width,
       );
-    expect(horizontal).toBe(true);
+    expect(keyboardVertical).toBe(true);
   });
 
   // Regression: the pickup handler used to live on the sprite layer, which is
@@ -145,6 +145,16 @@ test.describe("placement", () => {
     await refuse();
     await page.getByRole("button", { name: /Battleship/ }).click();
     await clean("taking a different ship");
+    await page.getByRole("button", { name: /Carrier/ }).click();
+    await clean("returning to the original ship");
+
+    // Rotation is reversible too. Returning to the same orientation is not a replay of
+    // the old drop and must not bring its warning back.
+    await refuse();
+    await rotateButton(page).click();
+    await clean("rotating away");
+    await rotateButton(page).click();
+    await clean("rotating back");
 
     await refuse();
     await ownCell(page, 0, 0).click();

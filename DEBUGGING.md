@@ -1,6 +1,6 @@
 # Debugging log
 
-Twenty-seven defects found while building this game, kept as a running log rather than
+Twenty-nine defects found while building this game, kept as a running log rather than
 reconstructed afterwards. This page is the short version: how they were caught, the seven
 that were most worth catching, and what is now guarding each one. Every entry, with the
 offending code inline, is in the [full appendix](docs/debugging-appendix.md).
@@ -13,6 +13,7 @@ offending code inline, is in the [full appendix](docs/debugging-appendix.md).
 | `npm run test:e2e` (Playwright, computed styles)   | 4, including two nobody had noticed by eye               |
 | Measuring the browser at each requested viewport   | 1 — sideways scroll only some scrollbars produce         |
 | Reading the code and the diff back                 | 3 — the two state bugs below, plus dead CSS              |
+| Reviewing proposed fixes against their own contract | 2 — reversible state and the final announcement          |
 | Playing it myself in a browser                     | 2                                                        |
 | `npm run sim` / `npm test` / `npm run typecheck`   | 2, and they hold the AI's published numbers in place     |
 | `npm run fuzz` (6,000 full games, every invariant) | 0 — see the appendix on [what a fuzzer cannot see][fuzz] |
@@ -64,10 +65,12 @@ invalid-placement tints. Invisible to every non-visual tool; caught by comparing
 **A refused placement outlived the attempt that caused it.** Reject a placement, hit
 Randomize, and the red warning described a board that no longer existed for the remaining
 2.2s of its timer. The rejection was free-floating UI state whose only end condition was a
-clock. Fixed by recording what the attempt was about (ship, orientation, fleet) and
-deriving whether it still applies, so every context change ends it without a handler
-having to remember to.
-([#25](docs/debugging-appendix.md#25-a-refused-placement-outlived-the-attempt-that-caused-it))
+clock. Fixed by recording what the attempt was about (ship, orientation, fleet), deriving
+whether it still applies, and irreversibly retiring it when a reversible control changes.
+The first fix only hid the marker: selecting Carrier again or rotating twice resurrected
+the old warning, which independent review caught before merge.
+([#25](docs/debugging-appendix.md#25-a-refused-placement-outlived-the-attempt-that-caused-it),
+[#28](docs/debugging-appendix.md#28-a-retired-placement-warning-could-come-back))
 
 **"Your move." while it was the enemy's move.** Whose turn it is was stored twice: the
 authoritative `game.turn`, and an `aiThinking` flag mirrored into it by an effect one
