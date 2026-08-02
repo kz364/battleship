@@ -386,14 +386,18 @@ export default function App() {
               {battle.phase === "placement" ? (
                 <div className="panel__actions">
                   {/*
-                    The orientation is on the button because the only other sign of it is
-                    the hover ghost, which touch and keyboard users never see.
+                    The orientation is in the button's accessible name and in the hint
+                    below, not in its visible label: a word that changes length re-wraps
+                    the button and moves everything under it. The only other sign of it
+                    is the hover ghost, which touch and keyboard users never see.
                   */}
-                  <button type="button" className="button" onClick={rotate}>
-                    Rotate (R) ·{" "}
-                    <span className="button__state">
-                      {orientation === "horizontal" ? "Horizontal" : "Vertical"}
-                    </span>
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={rotate}
+                    aria-label={`Rotate (R), currently ${orientation}`}
+                  >
+                    Rotate (R)
                   </button>
                   <button
                     type="button"
@@ -439,11 +443,14 @@ export default function App() {
                     highlighted={highlighted}
                     onHover={setHighlighted}
                     onSelect={(shipId) =>
-                      placedIds.has(shipId) ? pickUp(shipId) : selectShip(shipId)
+                      placedIds.has(shipId)
+                        ? pickUp(shipId)
+                        : selectShip(shipId)
                     }
                   />
                   <p className="hint">
-                    Press <kbd>R</kbd> to rotate. Click a placed ship to pick it
+                    Lying <span className="hint__state">{orientation}</span> —
+                    press <kbd>R</kbd> to rotate. Click a placed ship to pick it
                     up again.
                   </p>
                 </div>
@@ -477,20 +484,35 @@ export default function App() {
       </main>
 
       {battle.phase === "over" && (
-        <div className="result" role="alert">
-          <p className="result__text">
-            {game?.winner === "player" ? "Victory" : "Defeat"}
-          </p>
-          {lastEntry && (
-            // The log is intentionally not live, so the result alert must carry the
-            // game-ending shot as well as the verdict. Otherwise the final sink is the
-            // one shot a screen reader never hears.
-            <p className="result__detail">{describeShot(lastEntry)}</p>
+        <div className="result">
+          {/*
+            The alert is the verdict and the shot that decided it, and nothing else: it is
+            read out in full the moment it appears, and the ten-ship summary below would
+            bury the result it exists to announce. The rosters are ordinary content,
+            reachable afterwards.
+          */}
+          <div className="result__banner" role="alert">
+            <p className="result__text">
+              {game?.winner === "player" ? "Victory" : "Defeat"}
+            </p>
+            {lastEntry && (
+              // The log is intentionally not live, so the result alert must carry the
+              // game-ending shot as well as the verdict. Otherwise the final sink is the
+              // one shot a screen reader never hears.
+              <p className="result__detail">{describeShot(lastEntry)}</p>
+            )}
+            <p className="result__detail">
+              {game?.log.filter((e) => e.side === "player").length} shots fired
+              · {game?.log.filter((e) => e.side === "ai").length} taken
+            </p>
+          </div>
+
+          {game && (
+            <div className="result__fleets">
+              <Roster title="Your fleet" board={game.player} />
+              <Roster title="Enemy fleet" board={game.ai} />
+            </div>
           )}
-          <p className="result__detail">
-            {game?.log.filter((e) => e.side === "player").length} shots fired ·{" "}
-            {game?.log.filter((e) => e.side === "ai").length} taken
-          </p>
           <button
             type="button"
             className="button button--primary"

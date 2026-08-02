@@ -1,22 +1,22 @@
 # Debugging log
 
-Twenty-nine defects found while building this game, kept as a running log rather than
+Thirty-one defects found while building this game, kept as a running log rather than
 reconstructed afterwards. This page is the short version: how they were caught, the seven
 that were most worth catching, and what is now guarding each one. Every entry, with the
 offending code inline, is in the [full appendix](docs/debugging-appendix.md).
 
 ## How they were found
 
-| Tool                                               | What it caught                                           |
-| -------------------------------------------------- | -------------------------------------------------------- |
-| Someone else playing the deployed game             | 11 — by far the most productive                          |
-| `npm run test:e2e` (Playwright, computed styles)   | 4, including two nobody had noticed by eye               |
-| Measuring the browser at each requested viewport   | 1 — sideways scroll only some scrollbars produce         |
-| Reading the code and the diff back                 | 3 — the two state bugs below, plus dead CSS              |
+| Tool                                                | What it caught                                           |
+| --------------------------------------------------- | -------------------------------------------------------- |
+| Someone else playing the deployed game              | 13 — by far the most productive                          |
+| `npm run test:e2e` (Playwright, computed styles)    | 4, including two nobody had noticed by eye               |
+| Measuring the browser at each requested viewport    | 1 — sideways scroll only some scrollbars produce         |
+| Reading the code and the diff back                  | 3 — the two state bugs below, plus dead CSS              |
 | Reviewing proposed fixes against their own contract | 2 — reversible state and the final announcement          |
-| Playing it myself in a browser                     | 2                                                        |
-| `npm run sim` / `npm test` / `npm run typecheck`   | 2, and they hold the AI's published numbers in place     |
-| `npm run fuzz` (6,000 full games, every invariant) | 0 — see the appendix on [what a fuzzer cannot see][fuzz] |
+| Playing it myself in a browser                      | 2                                                        |
+| `npm run sim` / `npm test` / `npm run typecheck`    | 2, and they hold the AI's published numbers in place     |
+| `npm run fuzz` (6,000 full games, every invariant)  | 0 — see the appendix on [what a fuzzer cannot see][fuzz] |
 
 The distribution is the honest lesson. Types, lint, unit tests and a fuzzer between them
 found three bugs; a person clicking around found eleven. Six of the visual defects lived

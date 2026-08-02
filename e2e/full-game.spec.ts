@@ -41,8 +41,28 @@ test.describe("a game to the end", () => {
     await expect(result).toContainText(finalShot!);
     await expect(page.getByRole("status")).toHaveCount(0);
     expect(
-      await page.locator('[aria-live], [role="status"], [role="alert"]').count(),
+      await page
+        .locator('[aria-live], [role="status"], [role="alert"]')
+        .count(),
     ).toBe(1);
+
+    // Both fleets are summarised as they finished. The winner's five ships must all read
+    // as sunk, and the count of sunk hulls must match what the log actually recorded —
+    // the enemy roster spent the whole game concealing damage, so this is the one place
+    // it is allowed to tell the truth.
+    const fleets = page.locator(".result__fleets");
+    await expect(fleets.locator(".roster")).toHaveCount(2);
+
+    const won = ((await result.textContent()) ?? "").includes("Victory");
+    const loser = fleets
+      .locator(".roster")
+      .filter({ hasText: won ? "Enemy fleet" : "Your fleet" });
+    await expect(loser.locator(".roster__item--sunk")).toHaveCount(5);
+
+    const sunkInLog = await logEntries(page)
+      .filter({ hasText: /sank the enemy|is sunk/ })
+      .count();
+    await expect(fleets.locator(".roster__item--sunk")).toHaveCount(sunkInLog);
 
     // Firing after the game is over must be a no-op, not another log entry.
     const settled = await logEntries(page).count();
