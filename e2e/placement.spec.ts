@@ -193,9 +193,14 @@ test.describe("placement", () => {
     await expect(status(page)).toContainText("hangs 4 cells off the board");
     await expect(status(page)).toHaveClass(/app__status--warning/);
     await expect(page.locator(".cell--rejected")).toHaveCount(1);
-    await expect(status(page)).toContainText("5 ships to go", {
-      timeout: 5_000,
-    });
+
+    // The refusal is still true, so it stays put: no clock takes it away while the same
+    // ship is held the same way up over the same fleet.
+    await page.waitForTimeout(2_500);
+    const state = await readStatus(page);
+    expect(state.warning).toBe(true);
+    expect(state.rejected).toBe(1);
+    expect(state.text).toContain("Carrier won't fit at J10");
   });
 
   test("explains a placement blocked by another ship", async ({ page }) => {

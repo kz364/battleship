@@ -31,9 +31,6 @@ import "./styles/app.css";
 
 const DIFFICULTIES: Difficulty[] = ["easy", "medium", "hard"];
 
-/** How long a rejected placement stays announced and highlighted. */
-const REJECTION_MS = 2200;
-
 interface Rejection {
   message: string;
   /** The cells the ship would have covered, highlighted so the reason is visible. */
@@ -135,16 +132,11 @@ export default function App() {
   );
 
   // The red ghost only tells you a placement is illegal if you have a pointer that can
-  // hover. Touch and keyboard users get the same information from a rejection instead.
-  useEffect(() => {
-    if (!rejection) return;
-    const timer = setTimeout(() => setRejection(null), REJECTION_MS);
-    return () => clearTimeout(timer);
-  }, [rejection]);
-
-  // Shown only while the attempt it describes is still the attempt on the table. Rotating,
-  // taking a different ship, Randomize, Clear, New game and a successful drop all change
-  // one of these, which retires the message without each of them having to remember to.
+  // hover. Touch and keyboard users get the same information from this instead, and it
+  // stays legible for as long as the attempt it describes is still on the table rather
+  // than expiring on a clock.
+  // Rotating, taking a different ship, Randomize, Clear, New game and a successful drop
+  // all change one of these, which retires the message without each having to remember to.
   // `fleet` is compared by identity: every fleet edit produces a new array.
   const liveRejection =
     rejection &&

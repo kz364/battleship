@@ -47,16 +47,10 @@ test.describe("themes", () => {
           ".app__boards > .panel:first-child",
           ".app__boards > .panel:nth-child(2)",
           ".panel--log",
-        ].map(
-          (selector) => {
-            const box = document
-              .querySelector(selector)!
-              .getBoundingClientRect();
-            return [box.x, box.y, box.width, box.height].map((n) =>
-              n.toFixed(2),
-            );
-          },
-        ),
+        ].map((selector) => {
+          const box = document.querySelector(selector)!.getBoundingClientRect();
+          return [box.x, box.y, box.width, box.height].map((n) => n.toFixed(2));
+        }),
       );
 
     await open(page);
