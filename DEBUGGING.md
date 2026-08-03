@@ -1,9 +1,9 @@
 # Debugging log
 
-Thirty-two defects found while building this game, kept as a running log rather than
-reconstructed afterwards. This page is the short version: how they were caught, the seven
-that were most worth catching, and what is now guarding each one. Every entry, with the
-offending code inline, is in the [full appendix](docs/debugging-appendix.md).
+Thirty-two investigated issues found while building this game, kept as a running log
+rather than reconstructed afterwards. This page is the short version: how they were
+caught, the eight that were most worth catching, and what is now guarding each one. Every
+entry, with the offending code inline, is in the [full appendix](docs/debugging-appendix.md).
 
 ## How they were found
 
@@ -26,7 +26,7 @@ geometry in both themes, not an anecdote about a session.
 
 [fuzz]: docs/debugging-appendix.md#8-what-the-fuzzer-did-not-find
 
-## Seven representative bugs
+## Eight representative bugs
 
 **The AI secretly fired twice per turn.** Seeded games were not reproducible.
 `chooseShot()` was being called _inside_ a `setGame` updater, and React Strict Mode
@@ -88,6 +88,17 @@ see it: Playwright's device emulation uses overlay scrollbars too. The width bud
 subtracts the scrollbar, and the test runs at 305px as well as 320px.
 ([#27](docs/debugging-appendix.md#27-a-320px-screen-scrolled-sideways-but-only-on-some-of-them))
 
+**The fix for sockets erased the grid around every ship.** Grid lines and Classic peg
+sockets originally painted over hulls. The first fix suppressed the entire square under a
+ship, but the hull artwork is shorter than a square, so that also erased line segments the
+hull never covered. A later playthrough caught the regression. The replacement models the
+rendering order directly: cells paint the grid and sockets, hulls cover only their actual
+silhouettes, and shot pegs occupy a separate layer above both. The regression now asserts
+the full `cell < hull < peg` order and proves that a hull-covered square still paints the
+same decoration as open water.
+([#30](docs/debugging-appendix.md#30-peg-sockets-printed-through-every-hull-not-just-the-one-you-pointed-at),
+[#32](docs/debugging-appendix.md#32-and-then-the-grid-lines-vanished-around-the-ships))
+
 ## Three claims that were wrong before the code was
 
 Prose is the part of this repository nothing verifies, and it drifted three times: the
@@ -101,10 +112,11 @@ now asserted against the simulator rather than trusted, so they cannot drift aga
 
 ## What is guarding it now
 
-`npm run lint`, `npm run typecheck`, 50-odd unit tests, a 500-game fuzz over full games,
-the production build, and a Playwright suite across a desktop and a phone viewport in both
-themes — all of it on every pull request, and again on the exact merge commit before
-GitHub Pages will publish it. Nothing deploys that has not passed.
+`npm run lint`, `npm run typecheck`, 49 unit and simulation tests, a 500-game fuzz per
+difficulty (1,500 complete games), the production build, and 62 Playwright checks across
+desktop and phone viewports in both themes — all of it on every pull request, and again on
+the exact merge commit before GitHub Pages will publish it. Nothing deploys that has not
+passed.
 
 The appendix also records what was **deliberately not fixed**, with measurements: two
 published Battleship AIs reimplemented and rejected on paired trials (+0.47 ± 0.79 and
